@@ -11,8 +11,10 @@
     $routeUrl    = route('ai-chatbox.message');
     $clearUrl    = route('ai-chatbox.clear');
     $healthUrl   = route('ai-chatbox.health');
-    // Scope localStorage to the current user so logout/login never bleeds messages across accounts
-    $storageKey  = 'ai_chatbox_ui_' . (auth()->check() ? auth()->id() : 'guest');
+    // Scope localStorage to this app + user so different apps and accounts never share history
+    $appHash     = substr(md5(config('app.url', 'default')), 0, 8);
+    $userSegment = auth()->check() ? auth()->id() : 'guest';
+    $storageKey  = 'ai_chatbox_' . $appHash . '_' . $userSegment;
 @endphp
 
 {{-- ── Inline CSS variables so theme_color works without extra build steps ── --}}
