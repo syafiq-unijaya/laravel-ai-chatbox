@@ -2,7 +2,7 @@
 
 A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required.
 
-Messages are proxied through your Laravel backend to any OpenAI-compatible API, so your API token is never exposed to the browser.
+Messages are proxied through your Laravel backend to any OpenAI-compatible API.
 
 Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
 
@@ -45,11 +45,12 @@ Then run `composer update`.
 
 ### 2. Publish assets
 
-```bash
 # Publish CSS + JS to public/vendor/ai-chatbox/
+```bash
 php artisan vendor:publish --tag=ai-chatbox-assets
-
+```
 # Publish config (optional — to override defaults)
+```bash
 php artisan vendor:publish --tag=ai-chatbox-config
 ```
 
@@ -267,22 +268,6 @@ Any OpenAI-compatible API works — just swap the `.env` values.
 AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
 AI_CHATBOX_API_TOKEN=ollama
 AI_CHATBOX_API_MODEL=llama3
-```
-
-**OpenAI:**
-```env
-AI_CHATBOX_API_URL=https://api.openai.com/v1/chat/completions
-AI_CHATBOX_API_TOKEN=sk-...
-AI_CHATBOX_API_MODEL=gpt-4o
-```
-
-**Azure OpenAI:**
-```env
-AI_CHATBOX_API_URL=https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT/chat/completions?api-version=2024-02-01
-AI_CHATBOX_API_TOKEN=YOUR_AZURE_KEY
-AI_CHATBOX_API_MODEL=gpt-4o
-```
-
 ---
 
 ## License
