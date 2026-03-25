@@ -26,9 +26,7 @@ return [
     */
 
     'api_url' => env('AI_CHATBOX_API_URL', 'http://localhost:11434/v1/chat/completions'),
-
     'api_token' => env('AI_CHATBOX_API_TOKEN', 'ollama'),
-
     'api_model' => env('AI_CHATBOX_API_MODEL', 'phi3:mini'),
 
     /*
@@ -75,7 +73,6 @@ return [
     */
 
     'health_check' => env('AI_CHATBOX_HEALTH_CHECK', true),
-
     'middleware' => ['web', 'throttle:20,1'],
 
     /*
@@ -153,7 +150,6 @@ return [
     */
 
     'history_enabled' => env('AI_CHATBOX_HISTORY', true),
-
     'history_limit' => env('AI_CHATBOX_HISTORY_LIMIT', 10),
 
     /*
@@ -168,7 +164,6 @@ return [
     */
 
     'max_tokens' => env('AI_CHATBOX_MAX_TOKENS', null),
-
     'temperature' => env('AI_CHATBOX_TEMPERATURE', 0.7),
 
     /*

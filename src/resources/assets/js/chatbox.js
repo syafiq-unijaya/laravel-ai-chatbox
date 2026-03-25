@@ -14,6 +14,8 @@
         var soundVolume = typeof cfg.soundVolume === 'number' ? cfg.soundVolume : 0.4;
         var healthCheck = cfg.healthCheck !== false;
 
+        var STORAGE_KEY = 'ai_chatbox_ui';
+
         var toggle = document.getElementById('ai-chatbox-toggle');
         var window_ = document.getElementById('ai-chatbox-window');
         var messages = document.getElementById('ai-chatbox-messages');
@@ -30,6 +32,33 @@
 
         var greetingShown = false;
         var isChecking = false;
+        var msgHistory = [];
+
+        /* ── localStorage helpers ── */
+
+        function saveToStorage() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(msgHistory));
+            } catch (_) { }
+        }
+
+        function loadFromStorage() {
+            try {
+                var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                if (!Array.isArray(stored) || stored.length === 0) return;
+                stored.forEach(function (item) {
+                    renderBubble(item.role, item.text);
+                });
+                msgHistory = stored;
+                // If the first stored message is the greeting, don't show it again
+                if (greeting && stored[0] && stored[0].role === 'ai' && stored[0].text === greeting) {
+                    greetingShown = true;
+                }
+            } catch (_) { }
+        }
+
+        // Restore persisted messages before user opens the window
+        loadFromStorage();
 
         function openWindow() {
             window_.classList.add('open');
@@ -81,6 +110,8 @@
         clearBtn.addEventListener('click', function () {
             post(clearUrl, {}, function () {
                 messages.innerHTML = '';
+                msgHistory = [];
+                try { localStorage.removeItem(STORAGE_KEY); } catch (_) { }
                 greetingShown = false;
                 if (greeting) {
                     appendMessage('ai', greeting);
@@ -165,7 +196,8 @@
 
         /* ── Helpers ── */
 
-        function appendMessage(role, text) {
+        // Renders a bubble in the DOM only (used for both new messages and restoring from storage)
+        function renderBubble(role, text) {
             var bubble = document.createElement('div');
             bubble.className = 'ai-chatbox-msg ' + role;
             bubble.textContent = text;
@@ -178,6 +210,16 @@
 
             messages.appendChild(bubble);
             scrollToBottom();
+            return bubble;
+        }
+
+        // Renders a bubble AND persists it to history (errors are not persisted)
+        function appendMessage(role, text) {
+            var bubble = renderBubble(role, text);
+            if (role !== 'error') {
+                msgHistory.push({ role: role, text: text });
+                saveToStorage();
+            }
             return bubble;
         }
 
