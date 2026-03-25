@@ -9,7 +9,6 @@
         var healthUrl = cfg.healthUrl;
         var token = cfg.token;
         var greeting = cfg.greeting || '';
-        var avatar = cfg.avatar || '';
         var markdown = cfg.markdown && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined';
         var soundOn = cfg.sound !== false;
         var soundVolume = typeof cfg.soundVolume === 'number' ? cfg.soundVolume : 0.4;
@@ -171,34 +170,10 @@
             bubble.className = 'ai-chatbox-msg ' + role;
             bubble.textContent = text;
 
-            // Wrap AI (and error) messages in a row with the avatar
-            if (role === 'ai' || role === 'error') {
-                // Render markdown for AI replies only (not errors)
-                if (role === 'ai' && markdown) {
-                    bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
-                    bubble.classList.add('ai-chatbox-markdown');
-                }
-
-                var row = document.createElement('div');
-                row.className = 'ai-chatbox-row';
-
-                var avatarEl;
-                if (avatar) {
-                    avatarEl = document.createElement('img');
-                    avatarEl.src = avatar;
-                    avatarEl.alt = 'Bot';
-                    avatarEl.className = 'ai-chatbox-bubble-avatar';
-                } else {
-                    avatarEl = document.createElement('div');
-                    avatarEl.className = 'ai-chatbox-bubble-avatar-icon';
-                    avatarEl.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>';
-                }
-
-                row.appendChild(avatarEl);
-                row.appendChild(bubble);
-                messages.appendChild(row);
-                scrollToBottom();
-                return row;
+            // Render markdown for AI replies only (not errors)
+            if (role === 'ai' && markdown) {
+                bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
+                bubble.classList.add('ai-chatbox-markdown');
             }
 
             messages.appendChild(bubble);
@@ -207,30 +182,12 @@
         }
 
         function appendTyping() {
-            var row = document.createElement('div');
-            row.className = 'ai-chatbox-row';
-
-            var avatarEl;
-            if (avatar) {
-                avatarEl = document.createElement('img');
-                avatarEl.src = avatar;
-                avatarEl.alt = 'Bot';
-                avatarEl.className = 'ai-chatbox-bubble-avatar';
-            } else {
-                avatarEl = document.createElement('div');
-                avatarEl.className = 'ai-chatbox-bubble-avatar-icon';
-                avatarEl.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>';
-            }
-
-            var dot = document.createElement('div');
-            dot.className = 'ai-chatbox-typing';
-            dot.innerHTML = '<span></span><span></span><span></span>';
-
-            row.appendChild(avatarEl);
-            row.appendChild(dot);
-            messages.appendChild(row);
+            var div = document.createElement('div');
+            div.className = 'ai-chatbox-typing';
+            div.innerHTML = '<span></span><span></span><span></span>';
+            messages.appendChild(div);
             scrollToBottom();
-            return row;
+            return div;
         }
 
         function removeTyping(el) {

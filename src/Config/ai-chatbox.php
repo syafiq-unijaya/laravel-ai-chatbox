@@ -25,13 +25,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Response Language
+    |--------------------------------------------------------------------------
+    | The language the AI must always reply in, regardless of what language
+    | the user writes in. Uses the full language name (e.g. 'English',
+    | 'Bahasa Malaysia', 'French', 'Arabic').
+    |
+    | Set to empty string to let the AI reply in whatever language it chooses.
+    */
+
+    'language' => env('AI_CHATBOX_LANGUAGE', 'English'),
+
+    /*
+    |--------------------------------------------------------------------------
     | System Prompt
     |--------------------------------------------------------------------------
     | An optional system message sent to the AI on every request.
-    | Leave empty to disable.
+    | Leave empty to use the default. The {language} placeholder is
+    | automatically replaced with the value of the 'language' config above.
     */
 
-    'system_prompt' => env('AI_CHATBOX_SYSTEM_PROMPT', 'You are a helpful assistant.'),
+    'system_prompt' => env('AI_CHATBOX_SYSTEM_PROMPT', 'You are a helpful assistant. You must always respond in {language} only, no matter what language the user writes in. Do not switch to any other language under any circumstances.'),
 
     /*
     |--------------------------------------------------------------------------
@@ -81,19 +95,6 @@ return [
     'placeholder' => 'Type your message...',
     'theme_color' => '#4f46e5',
     'greeting' => env('AI_CHATBOX_GREETING', 'Hi! How can I help you today?'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Bot Avatar
-    |--------------------------------------------------------------------------
-    | URL to an image shown in the chat header and next to AI message bubbles.
-    | Leave empty to use the default bot icon (SVG).
-    |
-    | Example: 'avatar' => '/images/bot.png'
-    |          'avatar' => 'https://example.com/bot-avatar.png'
-    */
-
-    'avatar' => env('AI_CHATBOX_AVATAR', ''),
 
     /*
     |--------------------------------------------------------------------------

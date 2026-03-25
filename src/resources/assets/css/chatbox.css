@@ -180,7 +180,7 @@
 #ai-chatbox-header {
   background: var(--chatbox-color);
   color: #fff;
-  padding: 12px 14px;
+  padding: 10px 14px;
   font-weight: 600;
   font-size: 15px;
   flex-shrink: 0;
@@ -188,46 +188,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-}
-
-#ai-chatbox-header-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-#ai-chatbox-header-info span {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Avatar image */
-#ai-chatbox-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  border: 2px solid rgba(255,255,255,0.4);
-}
-
-/* Default bot icon (shown when no avatar URL is set) */
-#ai-chatbox-avatar-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-#ai-chatbox-avatar-icon svg {
-  width: 18px;
-  height: 18px;
 }
 
 /* Clear button in header */
@@ -253,43 +213,6 @@
 #ai-chatbox-clear svg {
   width: 18px;
   height: 18px;
-}
-
-/* ── Avatar beside AI message bubbles ── */
-.ai-chatbox-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-}
-
-.ai-chatbox-row.user {
-  flex-direction: row-reverse;
-}
-
-.ai-chatbox-bubble-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.ai-chatbox-bubble-avatar-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--chatbox-msg-bg);
-  border: 1px solid var(--chatbox-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.ai-chatbox-bubble-avatar-icon svg {
-  width: 14px;
-  height: 14px;
-  color: var(--chatbox-muted);
 }
 
 /* ── Messages area ── */

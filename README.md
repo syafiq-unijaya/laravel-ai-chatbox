@@ -63,7 +63,7 @@ The package defaults to Ollama on `localhost:11434` with `phi3:mini`. Override a
 AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
 AI_CHATBOX_API_TOKEN=ollama
 AI_CHATBOX_API_MODEL=phi3:mini
-AI_CHATBOX_SYSTEM_PROMPT="You are a helpful assistant."
+AI_CHATBOX_LANGUAGE=English
 ```
 
 > **Running Ollama in WSL?**
@@ -100,8 +100,14 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `api_url` | `AI_CHATBOX_API_URL` | `http://localhost:11434/v1/chat/completions` | AI API endpoint |
 | `api_token` | `AI_CHATBOX_API_TOKEN` | `ollama` | Bearer token |
 | `api_model` | `AI_CHATBOX_API_MODEL` | `phi3:mini` | Model name |
-| `system_prompt` | `AI_CHATBOX_SYSTEM_PROMPT` | `You are a helpful assistant.` | Prepended system message — leave empty to disable |
 | `timeout` | — | `30` | Seconds before the API request times out |
+
+### Response Language & System Prompt
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `language` | `AI_CHATBOX_LANGUAGE` | `English` | Language the AI must always reply in — leave empty to let the model decide |
+| `system_prompt` | `AI_CHATBOX_SYSTEM_PROMPT` | `You are a helpful assistant...` | System message sent on every request — use `{language}` as a placeholder for the configured language |
 
 ### Response Tuning
 
@@ -136,7 +142,6 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `theme_color` | — | `#4f46e5` | Primary colour (applied via CSS variable) |
 | `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — see below |
 | `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message shown on first open — leave empty to disable |
-| `avatar` | `AI_CHATBOX_AVATAR` | `''` | URL to bot avatar image — leave empty for default icon |
 
 ### Features
 
@@ -156,6 +161,32 @@ The package registers three routes under the configured prefix:
 GET  /ai-chatbox/health    Check if the AI service is reachable
 POST /ai-chatbox/message   Send a message to the AI
 POST /ai-chatbox/clear     Clear the session conversation history
+```
+
+---
+
+## Response Language
+
+The `language` config forces the AI to always reply in the specified language, regardless of what language the user writes in. It works at two levels:
+
+1. **System prompt** — `{language}` in the system prompt is replaced with the configured value at request time
+2. **Per-message reminder** — `[Important: Reply in {language} only.]` is appended to every user message, which improves compliance on smaller models like `phi3:mini`
+
+```env
+AI_CHATBOX_LANGUAGE=English
+AI_CHATBOX_LANGUAGE="Bahasa Malaysia"
+AI_CHATBOX_LANGUAGE=French
+AI_CHATBOX_LANGUAGE=Arabic
+```
+
+Leave empty to let the model reply in whatever language it chooses:
+```env
+AI_CHATBOX_LANGUAGE=
+```
+
+To customise the system prompt while keeping the language placeholder:
+```env
+AI_CHATBOX_SYSTEM_PROMPT="You are a customer support agent for Acme Corp. Always reply in {language}."
 ```
 
 ---
@@ -181,7 +212,7 @@ AI_CHATBOX_POSITION=bottom-left
 
 ## Health Check
 
-When enabled (default), clicking the chat button first sends a lightweight ping to the AI service base URL. The window only opens if the service is reachable. If unreachable, a toast message is shown near the button.
+When enabled (default), clicking the chat button first sends a lightweight ping to the AI service base URL. The window only opens if the service is reachable. If unreachable, a toast message is shown near the button for 4 seconds.
 
 Disable for local development or trusted internal environments:
 

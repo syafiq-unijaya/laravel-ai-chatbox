@@ -22,7 +22,8 @@ class ChatboxController extends Controller
         $apiToken = config('ai-chatbox.api_token');
         $model = config('ai-chatbox.api_model');
         $timeout = config('ai-chatbox.timeout', 30);
-        $system = config('ai-chatbox.system_prompt', '');
+        $language = config('ai-chatbox.language', 'English');
+        $system = str_replace('{language}', $language, config('ai-chatbox.system_prompt', ''));
         $useHistory = config('ai-chatbox.history_enabled', true);
         $historyLimit = (int) config('ai-chatbox.history_limit', 10);
         $maxTokens = config('ai-chatbox.max_tokens');
@@ -42,7 +43,14 @@ class ChatboxController extends Controller
         // Append stored history, then the new user message
         $history = $useHistory ? $request->session()->get(self::SESSION_KEY, []) : [];
         $messages = array_merge($messages, $history);
-        $messages[] = ['role' => 'user', 'content' => $request->input('message')];
+        $userMessage = $request->input('message');
+
+        // Append a language reminder to the user turn so small models stay on track
+        if (!empty($system) && !empty($language)) {
+            $userMessage .= "\n\n[Important: Reply in {$language} only.]";
+        }
+
+        $messages[] = ['role' => 'user', 'content' => $userMessage];
 
         try {
             $client = new Client(['timeout' => $timeout]);
