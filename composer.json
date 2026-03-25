@@ -1,0 +1,33 @@
+{
+    "name": "syafiq-unijaya/laravel-ai-chatbox",
+    "description": "A configurable AI chatbox widget for Laravel using AJAX and jQuery",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Syafiq Unijaya",
+            "email": "syafiqazwan.unijaya@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "illuminate/support": "^10.0|^11.0|^12.0",
+        "illuminate/routing": "^10.0|^11.0|^12.0",
+        "illuminate/http": "^10.0|^11.0|^12.0",
+        "guzzlehttp/guzzle": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "SyafiqUnijaya\\AiChatbox\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "SyafiqUnijaya\\AiChatbox\\AiChatboxServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

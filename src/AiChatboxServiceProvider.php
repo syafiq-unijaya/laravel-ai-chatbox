@@ -1,0 +1,69 @@
+<?php
+namespace SyafiqUnijaya\AiChatbox;
+
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+
+class AiChatboxServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        $this->mergeConfigFrom(
+            __DIR__ . '/Config/ai-chatbox.php',
+            'ai-chatbox'
+        );
+    }
+
+    public function boot(): void
+    {
+        $this->loadViewsFrom(__DIR__ . '/resources/views', 'ai-chatbox');
+
+        $this->registerRoutes();
+        $this->registerPublishing();
+        $this->registerBladeDirective();
+    }
+
+    protected function registerRoutes(): void
+    {
+        Route::group($this->routeConfiguration(), function () {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        });
+    }
+
+    protected function routeConfiguration(): array
+    {
+        return [
+            'prefix' => config('ai-chatbox.route_prefix'),
+            'middleware' => config('ai-chatbox.middleware'),
+        ];
+    }
+
+    protected function registerPublishing(): void
+    {
+        if ($this->app->runningInConsole()) {
+            // Config
+            $this->publishes([
+                __DIR__ . '/Config/ai-chatbox.php' => config_path('ai-chatbox.php'),
+            ], 'ai-chatbox-config');
+
+            // Views
+            $this->publishes([
+                __DIR__ . '/resources/views' => resource_path('views/vendor/ai-chatbox'),
+            ], 'ai-chatbox-views');
+
+            // Assets (CSS + JS)
+            $this->publishes([
+                __DIR__ . '/resources/assets' => public_path('vendor/ai-chatbox'),
+            ], 'ai-chatbox-assets');
+        }
+    }
+
+    protected function registerBladeDirective(): void
+    {
+        // Usage: @aichatbox  — drop anywhere in a Blade layout
+        Blade::directive('aichatbox', function () {
+            return "<?php echo view('ai-chatbox::chatbox')->render(); ?>";
+        });
+    }
+}
