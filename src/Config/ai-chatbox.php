@@ -9,12 +9,20 @@ return [
     | The endpoint URL and bearer token for your AI provider.
     | These should be set in your application's .env file.
     |
-    | Defaults to Ollama running locally on WSL (OpenAI-compatible API).
-    | Ollama does not require a real token — any non-empty string works.
+    | Supported formats (auto-detected from the response):
     |
-    | If accessing Ollama from Windows → WSL, use the WSL IP instead of
-    | localhost: run `ip addr show eth0` inside WSL to find it, e.g.
-    |   AI_CHATBOX_API_URL=http://172.x.x.x:11434/v1/chat/completions
+    |   Ollama cloud (native format):
+    |     AI_CHATBOX_API_URL=https://ollama.com/api/chat
+    |     AI_CHATBOX_API_TOKEN=your_ollama_api_key
+    |     AI_CHATBOX_API_MODEL=gpt-oss:120b
+    |
+    |   Ollama local / OpenAI-compatible:
+    |     AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
+    |     AI_CHATBOX_API_TOKEN=ollama   (any non-empty string)
+    |
+    |   If accessing local Ollama from Windows → WSL, use the WSL IP:
+    |     run `ip addr show eth0` inside WSL, e.g.
+    |     AI_CHATBOX_API_URL=http://172.x.x.x:11434/v1/chat/completions
     */
 
     'api_url' => env('AI_CHATBOX_API_URL', 'http://localhost:11434/v1/chat/completions'),

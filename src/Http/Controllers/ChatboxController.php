@@ -66,11 +66,17 @@ class ChatboxController extends Controller
                     'messages' => $messages,
                     'temperature' => $temperature,
                     'max_tokens' => $maxTokens,
+                    'stream' => false,
                 ], fn($v) => $v !== null),
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $reply = $data['choices'][0]['message']['content'] ?? 'No response from AI.';
+
+            // OpenAI-compatible format: data['choices'][0]['message']['content']
+            // Ollama native format:     data['message']['content']
+            $reply = $data['choices'][0]['message']['content']
+                ?? $data['message']['content']
+                ?? 'No response from AI.';
 
             // Persist history (user + assistant pair), capped at history_limit pairs
             if ($useHistory) {

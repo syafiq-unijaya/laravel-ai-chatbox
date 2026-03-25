@@ -45,11 +45,11 @@ Then run `composer update`.
 
 ### 2. Publish assets
 
-# Publish CSS + JS to public/vendor/ai-chatbox/
+#### Publish CSS + JS to public/vendor/ai-chatbox/
 ```bash
 php artisan vendor:publish --tag=ai-chatbox-assets
 ```
-# Publish config (optional — to override defaults)
+#### Publish config (optional — to override defaults)
 ```bash
 php artisan vendor:publish --tag=ai-chatbox-config
 ```
