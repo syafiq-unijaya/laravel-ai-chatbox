@@ -33,9 +33,18 @@ class AiChatboxServiceProvider extends ServiceProvider
 
     protected function routeConfiguration(): array
     {
+        $limit = config('ai-chatbox.rate_limit', 20);
+        $window = config('ai-chatbox.rate_window', 1);
+        $middleware = config('ai-chatbox.middleware', ['web']);
+
+        // Replace the static 'throttle:20,1' placeholder with the config values
+        $middleware = array_map(function ($m) use ($limit, $window) {
+            return $m === 'throttle:20,1' ? "throttle:{$limit},{$window}" : $m;
+        }, $middleware);
+
         return [
             'prefix' => config('ai-chatbox.route_prefix'),
-            'middleware' => config('ai-chatbox.middleware'),
+            'middleware' => $middleware,
         ];
     }
 

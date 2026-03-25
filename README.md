@@ -2,7 +2,7 @@
 
 A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required.
 
-The chatbox proxies user messages through your Laravel backend to any OpenAI-compatible API, so your API token is never exposed to the browser.
+Messages are proxied through your Laravel backend to any OpenAI-compatible API, so your API token is never exposed to the browser.
 
 Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
 
@@ -85,60 +85,149 @@ AI_CHATBOX_SYSTEM_PROMPT="You are a helpful assistant."
 @aichatbox
 ```
 
-The chatbox appears as a floating button in the bottom-right corner of every page that includes the layout.
+The chatbox appears as a floating button on every page that includes the layout.
 
 ---
 
-## Configuration
+## Configuration Reference
 
-Publish and edit `config/ai-chatbox.php` to customise all options:
+Publish and edit `config/ai-chatbox.php` to customise all options.
 
-| Key | Default | Description |
-|---|---|---|
-| `api_url` | `http://localhost:11434/v1/chat/completions` | AI API endpoint |
-| `api_token` | `ollama` | Bearer token — Ollama ignores the value but any non-empty string is required |
-| `api_model` | `phi3:mini` | Model name passed to the API |
-| `system_prompt` | `You are a helpful assistant.` | Prepended system message (leave empty to disable) |
-| `route_prefix` | `ai-chatbox` | URL prefix for the backend route |
-| `middleware` | `['web']` | Middleware applied to the route |
-| `title` | `AI Assistant` | Widget header title |
-| `placeholder` | `Type your message...` | Input placeholder text |
-| `theme_color` | `#4f46e5` | Primary colour applied via CSS variable |
-| `timeout` | `30` | Seconds before the API request times out |
+### AI API
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `api_url` | `AI_CHATBOX_API_URL` | `http://localhost:11434/v1/chat/completions` | AI API endpoint |
+| `api_token` | `AI_CHATBOX_API_TOKEN` | `ollama` | Bearer token |
+| `api_model` | `AI_CHATBOX_API_MODEL` | `phi3:mini` | Model name |
+| `system_prompt` | `AI_CHATBOX_SYSTEM_PROMPT` | `You are a helpful assistant.` | Prepended system message — leave empty to disable |
+| `timeout` | — | `30` | Seconds before the API request times out |
+
+### Response Tuning
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `temperature` | `AI_CHATBOX_TEMPERATURE` | `0.7` | Creativity — `0.0` deterministic, `1.0` creative |
+| `max_tokens` | `AI_CHATBOX_MAX_TOKENS` | `null` | Max reply length — omit to let the model decide |
+
+### Conversation History
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `history_enabled` | `AI_CHATBOX_HISTORY` | `true` | Send previous messages for context |
+| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `10` | Max user+assistant pairs to keep in session |
+
+### Routes & Security
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `route_prefix` | — | `ai-chatbox` | URL prefix for all chatbox routes |
+| `middleware` | — | `['web', 'throttle:20,1']` | Middleware applied to all routes |
+| `rate_limit` | `AI_CHATBOX_RATE_LIMIT` | `20` | Max requests per window per IP |
+| `rate_window` | `AI_CHATBOX_RATE_WINDOW` | `1` | Rate limit window in minutes |
+| `health_check` | `AI_CHATBOX_HEALTH_CHECK` | `true` | Ping the AI service before opening the chatbox |
+
+### Widget Appearance
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `title` | `AI_CHATBOX_TITLE` | `AI Assistant` | Header title |
+| `placeholder` | — | `Type your message...` | Input placeholder text |
+| `theme_color` | — | `#4f46e5` | Primary colour (applied via CSS variable) |
+| `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — see below |
+| `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message shown on first open — leave empty to disable |
+| `avatar` | `AI_CHATBOX_AVATAR` | `''` | URL to bot avatar image — leave empty for default icon |
+
+### Features
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `markdown` | `AI_CHATBOX_MARKDOWN` | `true` | Render AI replies as Markdown |
+| `sound` | `AI_CHATBOX_SOUND` | `true` | Play a ping when the AI replies |
+| `sound_volume` | `AI_CHATBOX_SOUND_VOLUME` | `0.4` | Volume — `0.0` silent, `1.0` full |
 
 ---
 
 ## Routes
 
-The package registers one route:
+The package registers three routes under the configured prefix:
 
 ```
-POST /ai-chatbox/message    (named: ai-chatbox.message)
-```
-
-Change the prefix or restrict access via middleware:
-
-```php
-// config/ai-chatbox.php
-'route_prefix' => 'chatbot',
-'middleware'   => ['web', 'auth'],
+GET  /ai-chatbox/health    Check if the AI service is reachable
+POST /ai-chatbox/message   Send a message to the AI
+POST /ai-chatbox/clear     Clear the session conversation history
 ```
 
 ---
 
-## Customising the widget
+## Widget Position
 
-Publish views to override the Blade template:
+Supported values for `position`:
+
+| Value | Location |
+|---|---|
+| `bottom-right` | Bottom-right corner (default) |
+| `bottom-left` | Bottom-left corner |
+| `top-right` | Top-right corner |
+| `top-left` | Top-left corner |
+
+For `top-*` positions the chat window opens downward; for `bottom-*` it opens upward.
+
+```env
+AI_CHATBOX_POSITION=bottom-left
+```
+
+---
+
+## Health Check
+
+When enabled (default), clicking the chat button first sends a lightweight ping to the AI service base URL. The window only opens if the service is reachable. If unreachable, a toast message is shown near the button.
+
+Disable for local development or trusted internal environments:
+
+```env
+AI_CHATBOX_HEALTH_CHECK=false
+```
+
+---
+
+## Markdown Rendering
+
+AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify), both loaded from CDN. Supported elements:
+
+- Bold, italic, strikethrough
+- Bullet and numbered lists
+- Inline code and fenced code blocks (dark theme)
+- Blockquotes, headings, tables, horizontal rules
+- Links
+
+Disable to display replies as plain text:
+
+```env
+AI_CHATBOX_MARKDOWN=false
+```
+
+---
+
+## Dark Mode
+
+The widget automatically adapts to the user's OS/browser dark mode preference via `prefers-color-scheme: dark`. No configuration required.
+
+---
+
+## Customising the Widget
+
+**Publish views** to override the Blade template:
 
 ```bash
 php artisan vendor:publish --tag=ai-chatbox-views
 ```
 
-The view is published to `resources/views/vendor/ai-chatbox/chatbox.blade.php`.
+Published to `resources/views/vendor/ai-chatbox/chatbox.blade.php`.
 
 ---
 
-## Using with other AI providers
+## Using with Other AI Providers
 
 Any OpenAI-compatible API works — just swap the `.env` values.
 

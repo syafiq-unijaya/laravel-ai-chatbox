@@ -1,5 +1,0 @@
-i need to create new laravel package that be imported using composer to any projects
-- the package is to enable a chatbox using ajax and jquery to communicate with ai via api
-- the chatbox is configurable, the url, token etc for security
-
-how should i start?
