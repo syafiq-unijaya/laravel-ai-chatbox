@@ -11,6 +11,8 @@
     $routeUrl    = route('ai-chatbox.message');
     $clearUrl    = route('ai-chatbox.clear');
     $healthUrl   = route('ai-chatbox.health');
+    // Scope localStorage to the current user so logout/login never bleeds messages across accounts
+    $storageKey  = 'ai_chatbox_ui_' . (auth()->check() ? auth()->id() : 'guest');
 @endphp
 
 {{-- ── Inline CSS variables so theme_color works without extra build steps ── --}}
@@ -79,10 +81,11 @@
         healthUrl:   "{{ $healthUrl }}",
         healthCheck: {{ $healthCheck ? 'true' : 'false' }},
         token:       "{{ csrf_token() }}",
-        greeting:    "{{ addslashes($greeting) }}",
+        greeting:    {!! json_encode($greeting) !!},
         markdown:    {{ $markdown ? 'true' : 'false' }},
         sound:       {{ $sound ? 'true' : 'false' }},
-        soundVolume: {{ (float) $soundVolume }}
+        soundVolume: {{ (float) $soundVolume }},
+        storageKey:  "{{ $storageKey }}"
     };
 </script>
 <script src="{{ asset('vendor/ai-chatbox/js/chatbox.js') }}"></script>

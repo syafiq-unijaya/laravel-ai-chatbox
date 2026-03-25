@@ -14,7 +14,7 @@
         var soundVolume = typeof cfg.soundVolume === 'number' ? cfg.soundVolume : 0.4;
         var healthCheck = cfg.healthCheck !== false;
 
-        var STORAGE_KEY = 'ai_chatbox_ui';
+        var STORAGE_KEY = cfg.storageKey || 'ai_chatbox_ui';
 
         var toggle = document.getElementById('ai-chatbox-toggle');
         var window_ = document.getElementById('ai-chatbox-window');
@@ -33,6 +33,23 @@
         var greetingShown = false;
         var isChecking = false;
         var msgHistory = [];
+
+        /* ── Always return the freshest CSRF headers ──
+         * Priority:
+         *  1. XSRF-TOKEN cookie — Laravel refreshes this on every response,
+         *     so it survives login/logout/session regeneration. Must be sent
+         *     as X-XSRF-TOKEN (Laravel decrypts it server-side).
+         *  2. <meta name="csrf-token"> — standard Laravel layout tag.
+         *  3. Token baked into AiChatboxConfig at page load (last resort).
+         */
+        function getCsrfHeaders() {
+            var cookieMatch = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+            if (cookieMatch) {
+                return { 'X-XSRF-TOKEN': decodeURIComponent(cookieMatch[1]) };
+            }
+            var meta = document.querySelector('meta[name="csrf-token"]');
+            return { 'X-CSRF-TOKEN': (meta && meta.getAttribute('content')) || token };
+        }
 
         /* ── localStorage helpers ── */
 
@@ -153,11 +170,15 @@
                 jQuery.ajax({
                     url: endpoint,
                     method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': token },
+                    headers: getCsrfHeaders(),
                     contentType: 'application/json',
                     data: JSON.stringify(payload),
                     success: onSuccess,
                     error: function (xhr) {
+                        if (xhr.status === 419) {
+                            onError('Your session has expired. Please refresh the page.');
+                            return;
+                        }
                         var msg = 'Something went wrong. Please try again.';
                         try {
                             var body = JSON.parse(xhr.responseText);
@@ -169,21 +190,19 @@
             } else {
                 fetch(endpoint, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': token,
-                    },
+                    headers: Object.assign({ 'Content-Type': 'application/json', 'Accept': 'application/json' }, getCsrfHeaders()),
                     body: JSON.stringify(payload),
                 })
                     .then(function (res) {
                         return res.json().then(function (data) {
-                            return { ok: res.ok, data: data };
+                            return { ok: res.ok, status: res.status, data: data };
                         });
                     })
                     .then(function (result) {
                         if (result.ok) {
                             onSuccess(result.data);
+                        } else if (result.status === 419) {
+                            onError('Your session has expired. Please refresh the page.');
                         } else {
                             onError(result.data.error || 'Something went wrong.');
                         }
@@ -264,7 +283,7 @@
                 jQuery.ajax({
                     url: endpoint,
                     method: 'GET',
-                    headers: { 'X-CSRF-TOKEN': token },
+                    headers: getCsrfHeaders(),
                     success: onSuccess,
                     error: function (xhr) {
                         var msg = 'AI service is currently unreachable.';
@@ -278,7 +297,7 @@
             } else {
                 fetch(endpoint, {
                     method: 'GET',
-                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': token },
+                    headers: Object.assign({ 'Accept': 'application/json' }, getCsrfHeaders()),
                 })
                     .then(function (res) {
                         return res.json().then(function (data) {
