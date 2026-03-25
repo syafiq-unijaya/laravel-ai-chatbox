@@ -51,7 +51,7 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'title' => 'AI Assistant',
+    'title' => env('AI_CHATBOX_TITLE', 'AI Assistant'),
     'placeholder' => 'Type your message...',
     'theme_color' => '#4f46e5',
 
