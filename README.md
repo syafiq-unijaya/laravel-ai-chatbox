@@ -140,6 +140,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `rate_limit` | `AI_CHATBOX_RATE_LIMIT` | `20` | Max requests per window per IP |
 | `rate_window` | `AI_CHATBOX_RATE_WINDOW` | `1` | Rate limit window in minutes |
 | `health_check` | `AI_CHATBOX_HEALTH_CHECK` | `true` | Ping the AI service before opening the chatbox |
+| `offline_message` | `AI_CHATBOX_OFFLINE_MESSAGE` | `AI service is currently unreachable.` | Message shown in the toast when the AI service is offline |
 
 To require authenticated users, add `'auth'` (or your guard) to the `middleware` array after publishing the config:
 
@@ -346,6 +347,12 @@ AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
 AI_CHATBOX_API_TOKEN=ollama
 AI_CHATBOX_API_MODEL=llama3
 ```
+
+---
+
+## Troubleshooting
+
+If the chatbox shows an offline toast or requests fail, check `storage/logs/laravel.log` for an error code (`E01`–`E19`). Full reference: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ---
 

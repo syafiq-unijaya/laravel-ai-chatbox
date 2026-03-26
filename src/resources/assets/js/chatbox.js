@@ -16,6 +16,7 @@
 
         var STORAGE_KEY    = cfg.storageKey || 'ai_chatbox_ui';
         var storageDriver  = cfg.storageType === 'session' ? sessionStorage : localStorage;
+        var offlineMessage = cfg.offlineMessage || 'AI service is currently unreachable.';
 
         var toggle = document.getElementById('ai-chatbox-toggle');
         var window_ = document.getElementById('ai-chatbox-window');
@@ -120,7 +121,7 @@
             }, function (msg) {
                 isChecking = false;
                 setToggleLoading(false);
-                showOfflineToast(msg || 'AI service is currently unreachable.');
+                showOfflineToast(msg || offlineMessage);
             });
         });
 
@@ -287,7 +288,7 @@
                     headers: getCsrfHeaders(),
                     success: onSuccess,
                     error: function (xhr) {
-                        var msg = 'AI service is currently unreachable.';
+                        var msg = offlineMessage;
                         try {
                             var body = JSON.parse(xhr.responseText);
                             if (body.message) msg = body.message;
@@ -309,7 +310,7 @@
                         if (result.ok) {
                             onSuccess(result.data);
                         } else {
-                            onError(result.data.message || 'AI service is currently unreachable.');
+                            onError(result.data.message || offlineMessage);
                         }
                     })
                     .catch(function () {

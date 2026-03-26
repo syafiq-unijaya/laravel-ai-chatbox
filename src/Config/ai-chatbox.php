@@ -73,6 +73,7 @@ return [
     */
 
     'health_check' => env('AI_CHATBOX_HEALTH_CHECK', true),
+    'offline_message' => env('AI_CHATBOX_OFFLINE_MESSAGE', 'AI service is currently unreachable.'),
 
     /*
     |--------------------------------------------------------------------------
@@ -152,7 +153,7 @@ return [
     */
 
     'sound' => env('AI_CHATBOX_SOUND', true),
-    'sound_volume' => env('AI_CHATBOX_SOUND_VOLUME', 0.4),
+    'sound_volume' => env('AI_CHATBOX_SOUND_VOLUME', 0.3),
 
     /*
     |--------------------------------------------------------------------------
@@ -177,7 +178,7 @@ return [
     */
 
     'history_enabled' => env('AI_CHATBOX_HISTORY', true),
-    'history_limit' => env('AI_CHATBOX_HISTORY_LIMIT', 10),
+    'history_limit' => env('AI_CHATBOX_HISTORY_LIMIT', 50),
 
     /*
     |--------------------------------------------------------------------------

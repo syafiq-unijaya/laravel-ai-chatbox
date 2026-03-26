@@ -15,7 +15,8 @@
     $appHash     = substr(md5(config('app.url', 'default')), 0, 8);
     $userSegment = auth()->check() ? auth()->id() : 'guest';
     $storageKey  = 'ai_chatbox_' . $appHash . '_' . $userSegment;
-    $storageType = config('ai-chatbox.storage', 'local') === 'session' ? 'session' : 'local';
+    $storageType    = config('ai-chatbox.storage', 'local') === 'session' ? 'session' : 'local';
+    $offlineMessage = config('ai-chatbox.offline_message', 'AI service is currently unreachable.');
 @endphp
 
 {{-- ── Inline CSS variables so theme_color works without extra build steps ── --}}
@@ -88,8 +89,9 @@
         markdown:    {{ $markdown ? 'true' : 'false' }},
         sound:       {{ $sound ? 'true' : 'false' }},
         soundVolume: {{ (float) $soundVolume }},
-        storageKey:  "{{ $storageKey }}",
-        storageType: "{{ $storageType }}"
+        storageKey:     "{{ $storageKey }}",
+        storageType:    "{{ $storageType }}",
+        offlineMessage: {!! json_encode($offlineMessage, JSON_HEX_TAG) !!}
     };
 </script>
 <script src="{{ asset('vendor/ai-chatbox/js/chatbox.js') }}"></script>
