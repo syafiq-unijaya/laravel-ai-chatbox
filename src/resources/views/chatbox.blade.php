@@ -1,7 +1,7 @@
 @php
     $title       = config('ai-chatbox.title', 'AI Assistant');
     $placeholder = config('ai-chatbox.placeholder', 'Type your message...');
-    $themeColor  = config('ai-chatbox.theme_color', '#4f46e5');
+    $themeColor  = config('ai-chatbox.theme_color', '#4f46e5'); // passed to JS via AiChatboxConfig
     $greeting    = config('ai-chatbox.greeting', '');
     $position    = config('ai-chatbox.position', 'bottom-right');
     $markdown    = config('ai-chatbox.markdown', true);
@@ -12,22 +12,15 @@
     $clearUrl    = route('ai-chatbox.clear');
     $healthUrl   = route('ai-chatbox.health');
     // Scope localStorage to this app + user so different apps and accounts never share history
-    $appHash     = substr(md5(config('app.url', 'default')), 0, 8);
+    // $aiChatboxAppHash is computed once at boot in the service provider
     $userSegment = auth()->check() ? auth()->id() : 'guest';
-    $storageKey  = 'ai_chatbox_' . $appHash . '_' . $userSegment;
+    $storageKey  = 'ai_chatbox_' . $aiChatboxAppHash . '_' . $userSegment;
     $storageType    = config('ai-chatbox.storage', 'local') === 'session' ? 'session' : 'local';
     $offlineMessage = config('ai-chatbox.offline_message', 'AI service is currently unreachable.');
 @endphp
 
-{{-- ── Inline CSS variables so theme_color works without extra build steps ── --}}
-<style>
-    :root {
-        --chatbox-color: {{ $themeColor }};
-    }
-</style>
-
 {{-- ── Stylesheet ── --}}
-<link rel="stylesheet" href="{{ asset('vendor/ai-chatbox/css/chatbox.css') }}">
+<link rel="stylesheet" href="{{ asset('vendor/ai-chatbox/css/chatbox.css') }}?v={{ $aiChatboxVersion }}">
 
 {{-- ── Widget markup ── --}}
 <div id="ai-chatbox-wrapper" class="ai-chatbox--{{ $position }}">
@@ -73,8 +66,8 @@
 
 {{-- ── Markdown libraries (CDN) — only loaded when markdown is enabled ── --}}
 @if($markdown)
-<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" integrity="sha384-odPBjvtXVM/5hOYIr3A1dB+flh0c3wAT3bSesIOqEGmyUA4JoKf/YTWy0XKOYAY7" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3.3.3/dist/purify.min.js" integrity="sha384-pcBjnGbkyKeOXaoFkmJiuR9E08/6gkmus6/Strimnxtl3uk0Hx23v345pWyC/MMr" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" integrity="sha384-odPBjvtXVM/5hOYIr3A1dB+flh0c3wAT3bSesIOqEGmyUA4JoKf/YTWy0XKOYAY7" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/dompurify@3.3.3/dist/purify.min.js" integrity="sha384-pcBjnGbkyKeOXaoFkmJiuR9E08/6gkmus6/Strimnxtl3uk0Hx23v345pWyC/MMr" crossorigin="anonymous"></script>
 @endif
 
 {{-- ── Script ── --}}
@@ -91,7 +84,8 @@
         soundVolume: {{ (float) $soundVolume }},
         storageKey:     "{{ $storageKey }}",
         storageType:    "{{ $storageType }}",
-        offlineMessage: {!! json_encode($offlineMessage, JSON_HEX_TAG) !!}
+        offlineMessage: {!! json_encode($offlineMessage, JSON_HEX_TAG) !!},
+        themeColor:     {!! json_encode($themeColor, JSON_HEX_TAG) !!}
     };
 </script>
-<script src="{{ asset('vendor/ai-chatbox/js/chatbox.js') }}"></script>
+<script src="{{ asset('vendor/ai-chatbox/js/chatbox.js') }}?v={{ $aiChatboxVersion }}"></script>

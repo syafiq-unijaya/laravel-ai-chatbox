@@ -14,17 +14,13 @@ class ChatboxController extends Controller
 {
     private const SESSION_KEY = 'ai_chatbox_history';
 
-    // ── Error codes ──────────────────────────────────────────────────────────
-    // Configuration
     private const E01 = 'E01'; // api_url is missing or empty
     private const E02 = 'E02'; // api_url cannot be parsed (no host)
     private const E03 = 'E03'; // api_token is missing or empty
     private const E04 = 'E04'; // api_model contains invalid characters
 
-    // Security
     private const E05 = 'E05'; // SSRF protection blocked a private/reserved IP
 
-    // Network / connectivity
     private const E06 = 'E06'; // DNS resolution failed (hostname not found)
     private const E07 = 'E07'; // Connection refused (service not running on that port)
     private const E08 = 'E08'; // Connection timed out
@@ -32,7 +28,6 @@ class ChatboxController extends Controller
     private const E10 = 'E10'; // Too many redirects
     private const E11 = 'E11'; // Generic connection error
 
-    // API / HTTP
     private const E12 = 'E12'; // HTTP 401 Unauthorized (invalid or expired token)
     private const E13 = 'E13'; // HTTP 403 Forbidden
     private const E14 = 'E14'; // HTTP 404 Not Found (wrong endpoint URL)
@@ -40,7 +35,6 @@ class ChatboxController extends Controller
     private const E16 = 'E16'; // HTTP 5xx server-side error from the AI service
     private const E17 = 'E17'; // Unexpected HTTP status
 
-    // Response
     private const E18 = 'E18'; // API returned an empty or unparseable response
     private const E19 = 'E19'; // Unknown / unclassified error
 
@@ -50,9 +44,11 @@ class ChatboxController extends Controller
             'message' => ['required', 'string', 'max:2000'],
         ]);
 
-        $apiUrl   = config('ai-chatbox.api_url');
-        $apiToken = config('ai-chatbox.api_token');
-        $model    = config('ai-chatbox.api_model');
+        $cfg = config('ai-chatbox');
+
+        $apiUrl = $cfg['api_url'] ?? '';
+        $apiToken = $cfg['api_token'] ?? '';
+        $model = $cfg['api_model'] ?? '';
 
         if (empty($apiUrl)) {
             return $this->errorResponse(self::E01, 'AI API URL is not configured.', 500);
@@ -66,13 +62,13 @@ class ChatboxController extends Controller
             return $this->errorResponse(self::E04, 'Invalid model name configured.', 500);
         }
 
-        $timeout      = config('ai-chatbox.timeout', 30);
-        $language     = config('ai-chatbox.language', 'English');
-        $system       = str_replace('{language}', $language, config('ai-chatbox.system_prompt', ''));
-        $useHistory   = config('ai-chatbox.history_enabled', true);
-        $historyLimit = (int) config('ai-chatbox.history_limit', 10);
-        $maxTokens    = config('ai-chatbox.max_tokens');
-        $temperature  = (float) config('ai-chatbox.temperature', 0.7);
+        $timeout = $cfg['timeout'] ?? 30;
+        $language = $cfg['language'] ?? 'English';
+        $system = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
+        $useHistory = $cfg['history_enabled'] ?? true;
+        $historyLimit = (int) ($cfg['history_limit'] ?? 50);
+        $maxTokens = $cfg['max_tokens'] ?? null;
+        $temperature = (float) ($cfg['temperature'] ?? 0.7);
 
         $messages = [];
 
@@ -84,11 +80,13 @@ class ChatboxController extends Controller
         $messages = array_merge($messages, $history);
         $userMessage = $request->input('message');
 
-        if (!empty($system) && !empty($language)) {
-            $userMessage .= "\n\n[Important: Reply in {$language} only.]";
-        }
+        // Append language reminder only to the outgoing API payload, not to the
+        // stored version, so history doesn't accumulate the suffix on every entry.
+        $apiMessage = (!empty($system) && !empty($language))
+        ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+        : $userMessage;
 
-        $messages[] = ['role' => 'user', 'content' => $userMessage];
+        $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
             $client = $this->makeClient(['timeout' => $timeout]);
@@ -96,15 +94,15 @@ class ChatboxController extends Controller
             $response = $client->post($apiUrl, [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $apiToken,
-                    'Content-Type'  => 'application/json',
-                    'Accept'        => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
                 ],
                 'json' => array_filter([
-                    'model'       => $model,
-                    'messages'    => $messages,
+                    'model' => $model,
+                    'messages' => $messages,
                     'temperature' => $temperature,
-                    'max_tokens'  => $maxTokens,
-                    'stream'      => false,
+                    'max_tokens' => $maxTokens,
+                    'stream' => false,
                 ], fn($v) => $v !== null),
             ]);
 
@@ -112,16 +110,14 @@ class ChatboxController extends Controller
 
             // OpenAI-compatible format: data['choices'][0]['message']['content']
             // Ollama native format:     data['message']['content']
-            $reply = $data['choices'][0]['message']['content']
-                ?? $data['message']['content']
-                ?? null;
+            $reply = $data['choices'][0]['message']['content'] ?? $data['message']['content'] ?? null;
 
             if ($reply === null || trim($reply) === '') {
                 return $this->errorResponse(self::E18, 'Unable to reach AI service. Please try again later.', 502);
             }
 
             if ($useHistory) {
-                $history[] = ['role' => 'user',      'content' => $request->input('message')];
+                $history[] = ['role' => 'user', 'content' => $request->input('message')];
                 $history[] = ['role' => 'assistant', 'content' => trim($reply)];
 
                 $maxEntries = $historyLimit * 2;
@@ -147,7 +143,7 @@ class ChatboxController extends Controller
 
         } catch (RequestException $e) {
             $status = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 500;
-            $code   = $this->classifyHttpStatus($status);
+            $code = $this->classifyHttpStatus($status);
             return $this->errorResponse($code, 'Unable to reach AI service. Please try again later.', $status, $e);
 
         } catch (\Throwable $e) {
@@ -164,26 +160,26 @@ class ChatboxController extends Controller
 
     public function healthCheck(): JsonResponse
     {
-        $apiUrl         = config('ai-chatbox.api_url');
-        $offlineMessage = config('ai-chatbox.offline_message', 'AI service is currently unreachable.');
-        $timeout        = min((int) config('ai-chatbox.timeout', 30), 5);
+        $cfg = config('ai-chatbox');
+        $apiUrl = $cfg['api_url'] ?? '';
+        $offlineMessage = $cfg['offline_message'] ?? 'AI service is currently unreachable.';
+        $timeout = min((int) ($cfg['timeout'] ?? 30), 5);
 
         if (empty($apiUrl)) {
             return $this->offlineResponse(self::E01, $offlineMessage);
         }
 
         $parts = parse_url($apiUrl);
-        $host  = $parts['host'] ?? '';
+        $host = $parts['host'] ?? '';
 
         if (empty($host)) {
             return $this->offlineResponse(self::E02, $offlineMessage);
         }
 
-        if (config('ai-chatbox.ssrf_protection', true)) {
-            $ip = filter_var($host, FILTER_VALIDATE_IP) ? $host : gethostbyname($host);
+        if ($cfg['ssrf_protection'] ?? true) {
+            $ip = $this->resolveHost($host);
 
-            // gethostbyname returns the original string unchanged on failure
-            if ($ip === $host && !filter_var($ip, FILTER_VALIDATE_IP)) {
+            if ($ip === null) {
                 return $this->offlineResponse(self::E06, $offlineMessage);
             }
 
@@ -199,14 +195,14 @@ class ChatboxController extends Controller
 
         try {
             $client = $this->makeClient([
-                'timeout'         => $timeout,
+                'timeout' => $timeout,
                 'connect_timeout' => $timeout,
             ]);
 
             $client->get($baseUrl, ['http_errors' => false]);
 
             return response()->json([
-                'status'  => 'online',
+                'status' => 'online',
                 'message' => 'AI service is reachable.',
             ]);
 
@@ -223,7 +219,7 @@ class ChatboxController extends Controller
         } catch (RequestException $e) {
             // Any HTTP response (even 4xx/5xx) means the server is up
             return response()->json([
-                'status'  => 'online',
+                'status' => 'online',
                 'message' => 'AI service is reachable.',
             ]);
 
@@ -240,31 +236,58 @@ class ChatboxController extends Controller
         return $factory($config);
     }
 
-    private function offlineResponse(string $code, string $message, ?\Throwable $e = null): JsonResponse
+    /**
+     * Resolve a hostname to an IP, with a static in-process cache to avoid
+     * repeated DNS lookups for the same host across health check calls.
+     * Returns null if resolution fails.
+     */
+    private function resolveHost(string $host): ?string
+    {
+        static $cache = [];
+
+        if (isset($cache[$host])) {
+            return $cache[$host];
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return $cache[$host] = $host;
+        }
+
+        $ip = gethostbyname($host);
+
+        // gethostbyname returns the original string unchanged on failure
+        if ($ip === $host) {
+            return null;
+        }
+
+        return $cache[$host] = $ip;
+    }
+
+    private function offlineResponse(string $code, string $message,  ? \Throwable $e = null) : JsonResponse
     {
         Log::warning('AI Chatbox health check failed', [
-            'code'    => $code,
+            'code' => $code,
             'message' => $e?->getMessage(),
         ]);
 
         return response()->json([
-            'status'  => 'offline',
-            'code'    => $code,
+            'status' => 'offline',
+            'code' => $code,
             'message' => $message,
         ], 503);
     }
 
-    private function errorResponse(string $code, string $message, int $status, ?\Throwable $e = null): JsonResponse
+    private function errorResponse(string $code, string $message, int $status,  ? \Throwable $e = null) : JsonResponse
     {
         Log::error('AI Chatbox error', [
-            'code'    => $code,
-            'status'  => $status,
+            'code' => $code,
+            'status' => $status,
             'message' => $e?->getMessage(),
         ]);
 
         return response()->json([
             'error' => $message,
-            'code'  => $code,
+            'code' => $code,
         ], $status);
     }
 
@@ -291,10 +314,10 @@ class ChatboxController extends Controller
     private function classifyHttpStatus(int $status): string
     {
         return match ($status) {
-            401     => self::E12,
-            403     => self::E13,
-            404     => self::E14,
-            429     => self::E15,
+            401 => self::E12,
+            403 => self::E13,
+            404 => self::E14,
+            429 => self::E15,
             500, 502, 503, 504 => self::E16,
             default => self::E17,
         };

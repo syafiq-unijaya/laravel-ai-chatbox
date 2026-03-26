@@ -18,6 +18,10 @@
         var storageDriver  = cfg.storageType === 'session' ? sessionStorage : localStorage;
         var offlineMessage = cfg.offlineMessage || 'AI service is currently unreachable.';
 
+        if (cfg.themeColor) {
+            document.documentElement.style.setProperty('--chatbox-color', cfg.themeColor);
+        }
+
         var toggle = document.getElementById('ai-chatbox-toggle');
         var window_ = document.getElementById('ai-chatbox-window');
         var messages = document.getElementById('ai-chatbox-messages');
@@ -35,6 +39,10 @@
         var greetingShown = false;
         var isChecking = false;
         var msgHistory = [];
+
+        var w = /** @type {any} */ (window);
+        var AudioCtx = w.AudioContext || w.webkitAudioContext;
+        var audioCtx = null;
 
         /* ── Always return the freshest CSRF headers ──
          * Priority:
@@ -66,8 +74,9 @@
                 var stored = JSON.parse(storageDriver.getItem(STORAGE_KEY) || 'null');
                 if (!Array.isArray(stored) || stored.length === 0) return;
                 stored.forEach(function (item) {
-                    renderBubble(item.role, item.text);
+                    renderBubble(item.role, item.text, false);
                 });
+                scrollToBottom();
                 msgHistory = stored;
                 // If the first stored message is the greeting, don't show it again
                 if (greeting && stored[0] && stored[0].role === 'ai' && stored[0].text === greeting) {
@@ -217,8 +226,9 @@
 
         /* ── Helpers ── */
 
-        // Renders a bubble in the DOM only (used for both new messages and restoring from storage)
-        function renderBubble(role, text) {
+        // Renders a bubble in the DOM only (used for both new messages and restoring from storage).
+        // Pass scroll=false when appending a batch of bubbles; caller scrolls once at the end.
+        function renderBubble(role, text, scroll) {
             var bubble = document.createElement('div');
             bubble.className = 'ai-chatbox-msg ' + role;
             bubble.textContent = text;
@@ -230,7 +240,7 @@
             }
 
             messages.appendChild(bubble);
-            scrollToBottom();
+            if (scroll !== false) scrollToBottom();
             return bubble;
         }
 
@@ -324,12 +334,11 @@
         }
 
         function ping() {
-            if (!soundOn) return;
+            if (!soundOn || !AudioCtx) return;
             try {
-                var w = /** @type {any} */ (window);
-                var AudioCtx = w.AudioContext || w.webkitAudioContext;
-                if (!AudioCtx) return;
-                var ctx = new AudioCtx();
+                if (!audioCtx) audioCtx = new AudioCtx();
+                var ctx = audioCtx;
+
                 var gain = ctx.createGain();
                 gain.connect(ctx.destination);
                 gain.gain.setValueAtTime(soundVolume, ctx.currentTime);
@@ -342,7 +351,6 @@
                 osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.15);
                 osc.start(ctx.currentTime);
                 osc.stop(ctx.currentTime + 0.4);
-                osc.onended = function () { ctx.close(); };
             } catch (_) { /* Web Audio not supported — silently skip */ }
         }
     });

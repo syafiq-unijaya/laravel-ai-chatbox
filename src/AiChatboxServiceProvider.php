@@ -5,11 +5,14 @@ use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use SyafiqUnijaya\AiChatbox\Http\Middleware\CorsMiddleware;
 
 class AiChatboxServiceProvider extends ServiceProvider
 {
+    public const VERSION = '1.4.0';
+
     public function register(): void
     {
         $this->mergeConfigFrom(
@@ -30,6 +33,10 @@ class AiChatboxServiceProvider extends ServiceProvider
         }
 
         $this->loadViewsFrom(__DIR__ . '/resources/views', 'ai-chatbox');
+
+        // Compute once at boot — app.url never changes at runtime
+        View::share('aiChatboxAppHash', substr(md5(config('app.url', 'default')), 0, 8));
+        View::share('aiChatboxVersion', self::VERSION);
 
         $this->registerRoutes();
         $this->registerPublishing();
