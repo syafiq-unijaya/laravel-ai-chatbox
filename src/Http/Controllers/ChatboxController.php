@@ -7,6 +7,7 @@ use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 
 class ChatboxController extends Controller
 {
@@ -21,6 +22,10 @@ class ChatboxController extends Controller
         $apiUrl = config('ai-chatbox.api_url');
         $apiToken = config('ai-chatbox.api_token');
         $model = config('ai-chatbox.api_model');
+
+        if (!empty($model) && !preg_match('/^[a-zA-Z0-9_:.\-]+$/', $model)) {
+            return response()->json(['error' => 'Invalid model name configured.'], 500);
+        }
         $timeout = config('ai-chatbox.timeout', 30);
         $language = config('ai-chatbox.language', 'English');
         $system = str_replace('{language}', $language, config('ai-chatbox.system_prompt', ''));
@@ -74,9 +79,7 @@ class ChatboxController extends Controller
 
             // OpenAI-compatible format: data['choices'][0]['message']['content']
             // Ollama native format:     data['message']['content']
-            $reply = $data['choices'][0]['message']['content']
-                ?? $data['message']['content']
-                ?? 'No response from AI.';
+            $reply = $data['choices'][0]['message']['content'] ?? $data['message']['content'] ?? 'No response from AI.';
 
             // Persist history (user + assistant pair), capped at history_limit pairs
             if ($useHistory) {
@@ -96,11 +99,12 @@ class ChatboxController extends Controller
 
         } catch (RequestException $e) {
             $status = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 500;
-            $message = $e->hasResponse()
-            ? json_decode($e->getResponse()->getBody()->getContents(), true)['error']['message'] ?? $e->getMessage()
-            : $e->getMessage();
+            Log::error('AI Chatbox API error', [
+                'status' => $status,
+                'message' => $e->getMessage(),
+            ]);
 
-            return response()->json(['error' => $message], $status);
+            return response()->json(['error' => 'Unable to reach AI service. Please try again later.'], $status);
         }
     }
 
@@ -118,7 +122,20 @@ class ChatboxController extends Controller
 
         // Derive the base URL (scheme + host + port) to avoid sending a real request
         $parts = parse_url($apiUrl);
-        $baseUrl = ($parts['scheme'] ?? 'http') . '://' . ($parts['host'] ?? 'localhost');
+        $host = $parts['host'] ?? '';
+
+        // Block private/reserved IP ranges and localhost to prevent SSRF (disable via config for local dev)
+        if (config('ai-chatbox.ssrf_protection', true)) {
+            $ip = filter_var($host, FILTER_VALIDATE_IP) ? $host : gethostbyname($host);
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                return response()->json([
+                    'status' => 'offline',
+                    'message' => 'AI service is unreachable. Please try again later.',
+                ], 503);
+            }
+        }
+
+        $baseUrl = ($parts['scheme'] ?? 'http') . '://' . $host;
 
         if (!empty($parts['port'])) {
             $baseUrl .= ':' . $parts['port'];

@@ -14,7 +14,8 @@
         var soundVolume = typeof cfg.soundVolume === 'number' ? cfg.soundVolume : 0.4;
         var healthCheck = cfg.healthCheck !== false;
 
-        var STORAGE_KEY = cfg.storageKey || 'ai_chatbox_ui';
+        var STORAGE_KEY    = cfg.storageKey || 'ai_chatbox_ui';
+        var storageDriver  = cfg.storageType === 'session' ? sessionStorage : localStorage;
 
         var toggle = document.getElementById('ai-chatbox-toggle');
         var window_ = document.getElementById('ai-chatbox-window');
@@ -55,13 +56,13 @@
 
         function saveToStorage() {
             try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(msgHistory));
+                storageDriver.setItem(STORAGE_KEY, JSON.stringify(msgHistory));
             } catch (_) { }
         }
 
         function loadFromStorage() {
             try {
-                var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                var stored = JSON.parse(storageDriver.getItem(STORAGE_KEY) || 'null');
                 if (!Array.isArray(stored) || stored.length === 0) return;
                 stored.forEach(function (item) {
                     renderBubble(item.role, item.text);
@@ -128,7 +129,7 @@
             post(clearUrl, {}, function () {
                 messages.innerHTML = '';
                 msgHistory = [];
-                try { localStorage.removeItem(STORAGE_KEY); } catch (_) { }
+                try { storageDriver.removeItem(STORAGE_KEY); } catch (_) { }
                 greetingShown = false;
                 if (greeting) {
                     appendMessage('ai', greeting);

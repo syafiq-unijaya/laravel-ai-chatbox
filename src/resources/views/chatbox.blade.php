@@ -15,6 +15,7 @@
     $appHash     = substr(md5(config('app.url', 'default')), 0, 8);
     $userSegment = auth()->check() ? auth()->id() : 'guest';
     $storageKey  = 'ai_chatbox_' . $appHash . '_' . $userSegment;
+    $storageType = config('ai-chatbox.storage', 'local') === 'session' ? 'session' : 'local';
 @endphp
 
 {{-- ── Inline CSS variables so theme_color works without extra build steps ── --}}
@@ -71,8 +72,8 @@
 
 {{-- ── Markdown libraries (CDN) — only loaded when markdown is enabled ── --}}
 @if($markdown)
-<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js" integrity="sha384-odPBjvtXVM/5hOYIr3A1dB+flh0c3wAT3bSesIOqEGmyUA4JoKf/YTWy0XKOYAY7" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.3.3/dist/purify.min.js" integrity="sha384-pcBjnGbkyKeOXaoFkmJiuR9E08/6gkmus6/Strimnxtl3uk0Hx23v345pWyC/MMr" crossorigin="anonymous"></script>
 @endif
 
 {{-- ── Script ── --}}
@@ -83,11 +84,12 @@
         healthUrl:   "{{ $healthUrl }}",
         healthCheck: {{ $healthCheck ? 'true' : 'false' }},
         token:       "{{ csrf_token() }}",
-        greeting:    {!! json_encode($greeting) !!},
+        greeting:    {!! json_encode($greeting, JSON_HEX_TAG) !!},
         markdown:    {{ $markdown ? 'true' : 'false' }},
         sound:       {{ $sound ? 'true' : 'false' }},
         soundVolume: {{ (float) $soundVolume }},
-        storageKey:  "{{ $storageKey }}"
+        storageKey:  "{{ $storageKey }}",
+        storageType: "{{ $storageType }}"
     };
 </script>
 <script src="{{ asset('vendor/ai-chatbox/js/chatbox.js') }}"></script>

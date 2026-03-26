@@ -2,8 +2,10 @@
 namespace SyafiqUnijaya\AiChatbox;
 
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use SyafiqUnijaya\AiChatbox\Http\Middleware\CorsMiddleware;
 
 class AiChatboxServiceProvider extends ServiceProvider
 {
@@ -17,6 +19,10 @@ class AiChatboxServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (config('app.debug') && config('ai-chatbox.api_token') !== 'ollama') {
+            Log::warning('AI Chatbox: APP_DEBUG is enabled while a real API token is configured. Disable debug mode in production.');
+        }
+
         $this->loadViewsFrom(__DIR__ . '/resources/views', 'ai-chatbox');
 
         $this->registerRoutes();
@@ -26,6 +32,8 @@ class AiChatboxServiceProvider extends ServiceProvider
 
     protected function registerRoutes(): void
     {
+        Route::aliasMiddleware('ai-chatbox.cors', CorsMiddleware::class);
+
         Route::group($this->routeConfiguration(), function () {
             $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
         });

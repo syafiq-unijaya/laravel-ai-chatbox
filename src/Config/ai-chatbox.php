@@ -73,7 +73,34 @@ return [
     */
 
     'health_check' => env('AI_CHATBOX_HEALTH_CHECK', true),
-    'middleware' => ['web', 'throttle:20,1'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | SSRF Protection
+    |--------------------------------------------------------------------------
+    | When enabled, the health check blocks requests to private/reserved IP
+    | ranges (localhost, 10.x, 172.16.x, 192.168.x, 169.254.x) to prevent
+    | Server-Side Request Forgery attacks.
+    |
+    | Disable this only in local development where your AI service runs on
+    | localhost or a private network (e.g. local Ollama).
+    |
+    | AI_CHATBOX_SSRF_PROTECTION=false
+    */
+
+    'ssrf_protection' => env('AI_CHATBOX_SSRF_PROTECTION', true),
+    'middleware' => ['web', 'throttle:20,1', 'ai-chatbox.cors'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | CORS — Allowed Origins
+    |--------------------------------------------------------------------------
+    | Origins permitted to call the chatbox endpoints. Defaults to the app's
+    | own URL so cross-origin requests from other domains are rejected.
+    | Add additional origins as needed, e.g. ['https://app.example.com'].
+    */
+
+    'allowed_origins' => [env('APP_URL', 'http://localhost')],
 
     /*
     |--------------------------------------------------------------------------
@@ -151,6 +178,20 @@ return [
 
     'history_enabled' => env('AI_CHATBOX_HISTORY', true),
     'history_limit' => env('AI_CHATBOX_HISTORY_LIMIT', 10),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Client-side Storage Driver
+    |--------------------------------------------------------------------------
+    | Controls where chat history is persisted in the browser.
+    |
+    | 'local'   — localStorage: survives tab/browser close (default)
+    | 'session' — sessionStorage: cleared when the tab is closed (more private)
+    |
+    | Use 'session' for apps where users may discuss sensitive information.
+    */
+
+    'storage' => env('AI_CHATBOX_STORAGE', 'local'),
 
     /*
     |--------------------------------------------------------------------------
