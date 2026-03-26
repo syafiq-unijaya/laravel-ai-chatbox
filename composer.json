@@ -1,16 +1,34 @@
 {
     "name": "syafiq-unijaya/laravel-ai-chatbox",
-    "description": "A configurable AI chatbox widget for Laravel using AJAX and jQuery",
+    "description": "A configurable AI chatbox widget for Laravel. Drop-in support for Ollama, OpenAI, Groq, and any OpenAI-compatible API.",
     "type": "library",
+    "keywords": [
+        "laravel",
+        "chatbot",
+        "chatbox",
+        "ai",
+        "ollama",
+        "openai",
+        "widget",
+        "llm",
+        "chat"
+    ],
+    "homepage": "https://github.com/syafiq-unijaya/laravel-ai-chatbox",
     "license": "MIT",
     "authors": [
         {
             "name": "Syafiq Unijaya",
-            "email": "syafiqazwan.unijaya@gmail.com"
+            "email": "syafiqazwan.unijaya@gmail.com",
+            "homepage": "https://github.com/syafiq-unijaya",
+            "role": "Developer"
         }
     ],
+    "support": {
+        "issues": "https://github.com/syafiq-unijaya/laravel-ai-chatbox/issues",
+        "source": "https://github.com/syafiq-unijaya/laravel-ai-chatbox"
+    },
     "require": {
-        "php": "^8.1",
+        "php": "^8.2",
         "illuminate/support": "^10.0|^11.0|^12.0",
         "illuminate/routing": "^10.0|^11.0|^12.0",
         "illuminate/http": "^10.0|^11.0|^12.0",
@@ -20,6 +38,18 @@
         "psr-4": {
             "SyafiqUnijaya\\AiChatbox\\": "src/"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SyafiqUnijaya\\AiChatbox\\Tests\\": "tests/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5",
+        "orchestra/testbench": "^10.0"
+    },
+    "scripts": {
+        "test": "phpunit"
     },
     "extra": {
         "laravel": {

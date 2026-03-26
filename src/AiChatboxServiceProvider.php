@@ -1,6 +1,7 @@
 <?php
 namespace SyafiqUnijaya\AiChatbox;
 
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
@@ -15,6 +16,11 @@ class AiChatboxServiceProvider extends ServiceProvider
             __DIR__ . '/Config/ai-chatbox.php',
             'ai-chatbox'
         );
+
+        // Bind a Guzzle client factory so tests can swap it with a mock handler
+        $this->app->bind('ai-chatbox.guzzle', function () {
+            return fn(array $config = []) => new Client($config);
+        });
     }
 
     public function boot(): void

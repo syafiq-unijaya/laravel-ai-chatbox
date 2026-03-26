@@ -91,7 +91,7 @@ class ChatboxController extends Controller
         $messages[] = ['role' => 'user', 'content' => $userMessage];
 
         try {
-            $client = new Client(['timeout' => $timeout]);
+            $client = $this->makeClient(['timeout' => $timeout]);
 
             $response = $client->post($apiUrl, [
                 'headers' => [
@@ -198,7 +198,7 @@ class ChatboxController extends Controller
         }
 
         try {
-            $client = new Client([
+            $client = $this->makeClient([
                 'timeout'         => $timeout,
                 'connect_timeout' => $timeout,
             ]);
@@ -233,6 +233,12 @@ class ChatboxController extends Controller
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    protected function makeClient(array $config): Client
+    {
+        $factory = app('ai-chatbox.guzzle');
+        return $factory($config);
+    }
 
     private function offlineResponse(string $code, string $message, ?\Throwable $e = null): JsonResponse
     {

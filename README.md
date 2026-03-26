@@ -10,7 +10,7 @@ Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
 
 ## Requirements
 
-- PHP 8.1+
+- PHP 8.2+
 - Laravel 10 / 11 / 12
 - jQuery (optional — falls back to native `fetch`)
 
