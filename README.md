@@ -1,5 +1,11 @@
 # laravel-ai-chatbox
 
+[![Tests](https://github.com/syafiq-unijaya/laravel-ai-chatbox/actions/workflows/tests.yml/badge.svg)](https://github.com/syafiq-unijaya/laravel-ai-chatbox/actions/workflows/tests.yml)
+[![Latest Version](https://img.shields.io/packagist/v/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![Downloads](https://img.shields.io/packagist/dt/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![PHP](https://img.shields.io/packagist/php-v/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![License](https://img.shields.io/packagist/l/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+
 A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required.
 
 Messages are proxied through your Laravel backend to any OpenAI-compatible API.
@@ -108,7 +114,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `api_url` | `AI_CHATBOX_API_URL` | `http://localhost:11434/v1/chat/completions` | AI API endpoint |
 | `api_token` | `AI_CHATBOX_API_TOKEN` | `ollama` | Bearer token |
 | `api_model` | `AI_CHATBOX_API_MODEL` | `phi3:mini` | Model name |
-| `timeout` | — | `30` | Seconds before the API request times out |
+| `timeout` | `AI_CHATBOX_TIMEOUT` | `30` | Seconds before the API request times out |
 
 ### Response Language & System Prompt
 
@@ -129,7 +135,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `history_enabled` | `AI_CHATBOX_HISTORY` | `true` | Send previous messages for context |
-| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `10` | Max user+assistant pairs to keep in session |
+| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `50` | Max user+assistant pairs to keep in session |
 
 ### Routes & Middleware
 
@@ -177,7 +183,7 @@ To require authenticated users, add `'auth'` (or your guard) to the `middleware`
 |---|---|---|---|
 | `markdown` | `AI_CHATBOX_MARKDOWN` | `true` | Render AI replies as Markdown |
 | `sound` | `AI_CHATBOX_SOUND` | `true` | Play a ping when the AI replies |
-| `sound_volume` | `AI_CHATBOX_SOUND_VOLUME` | `0.4` | Volume — `0.0` silent, `1.0` full |
+| `sound_volume` | `AI_CHATBOX_SOUND_VOLUME` | `0.3` | Volume — `0.0` silent, `1.0` full |
 
 ---
 
@@ -341,11 +347,40 @@ Published to `resources/views/vendor/ai-chatbox/chatbox.blade.php`.
 
 Any OpenAI-compatible API works — just swap the `.env` values.
 
-**Ollama — different model:**
+**Ollama local — different model:**
 ```env
 AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
 AI_CHATBOX_API_TOKEN=ollama
 AI_CHATBOX_API_MODEL=llama3
+AI_CHATBOX_SSRF_PROTECTION=false
+```
+
+**Ollama cloud:**
+```env
+AI_CHATBOX_API_URL=https://ollama.com/api/chat
+AI_CHATBOX_API_TOKEN=your_ollama_api_key
+AI_CHATBOX_API_MODEL=gpt-oss:120b
+```
+
+**OpenAI:**
+```env
+AI_CHATBOX_API_URL=https://api.openai.com/v1/chat/completions
+AI_CHATBOX_API_TOKEN=sk-...
+AI_CHATBOX_API_MODEL=gpt-4o
+```
+
+**Groq:**
+```env
+AI_CHATBOX_API_URL=https://api.groq.com/openai/v1/chat/completions
+AI_CHATBOX_API_TOKEN=gsk_...
+AI_CHATBOX_API_MODEL=llama-3.3-70b-versatile
+```
+
+**OpenRouter:**
+```env
+AI_CHATBOX_API_URL=https://openrouter.ai/api/v1/chat/completions
+AI_CHATBOX_API_TOKEN=sk-or-...
+AI_CHATBOX_API_MODEL=mistralai/mistral-7b-instruct
 ```
 
 ---

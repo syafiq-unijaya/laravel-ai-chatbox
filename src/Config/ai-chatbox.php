@@ -215,6 +215,6 @@ return [
     | Seconds to wait for a response from the AI API before timing out.
     */
 
-    'timeout' => 30,
+    'timeout' => env('AI_CHATBOX_TIMEOUT', 30),
 
 ];
