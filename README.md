@@ -208,6 +208,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `title` | `AI_CHATBOX_TITLE` | `AI Assistant` | Header title |
 | `placeholder` | — | `Type your message...` | Input placeholder text |
 | `theme_color` | — | `#4f46e5` | Primary colour (CSS variable) |
+| `color_scheme` | `AI_CHATBOX_COLOR_SCHEME` | `auto` | Color scheme for the RAG admin UI — `auto` (follows OS), `light`, or `dark` |
 | `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — `bottom-right`, `bottom-left`, `top-right`, `top-left` |
 | `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message on first open — leave empty to disable |
 
@@ -230,7 +231,9 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `rag_top_k` | `AI_CHATBOX_RAG_TOP_K` | `3` | Number of chunks retrieved per query |
 | `rag_chunk_size` | `AI_CHATBOX_RAG_CHUNK_SIZE` | `500` | Target chunk size in tokens (~4 chars/token) |
 | `rag_chunk_overlap` | `AI_CHATBOX_RAG_CHUNK_OVERLAP` | `50` | Overlap between consecutive chunks in tokens |
-| `rag_similarity_threshold` | `AI_CHATBOX_RAG_THRESHOLD` | `0.3` | Minimum cosine similarity score `0.0`–`1.0` |
+| `rag_similarity_threshold` | `AI_CHATBOX_RAG_THRESHOLD` | `0.2` | Minimum cosine similarity score `0.0`–`1.0` |
+| `rag_context_prompt` | `AI_CHATBOX_RAG_CONTEXT_PROMPT` | *(see below)* | Instruction prepended to retrieved chunks — use `{chunks}` as placeholder |
+| `rag_processing_timeout` | `AI_CHATBOX_RAG_PROCESSING_TIMEOUT` | `0` | Max seconds for a single upload/reprocess — `0` = no limit (recommended for local models) |
 | `rag_admin_middleware` | — | `['web', 'auth']` | Middleware for the RAG admin UI (publish config to change) |
 
 ---
@@ -578,20 +581,17 @@ On every chat message:
 
 1. The user's message is embedded using the same embedding model
 2. Cosine similarity is computed **in PHP** against every chunk stored in the database
-3. Chunks below `rag_similarity_threshold` (default `0.3`) are discarded
-4. The top `rag_top_k` (default `3`) chunks are prepended to the AI's context as a system message:
-
-```
-Relevant context from the knowledge base:
-
-[chunk 1 content]
-
----
-
-[chunk 2 content]
-```
-
+3. Chunks below `rag_similarity_threshold` (default `0.2`) are discarded
+4. The top `rag_top_k` (default `3`) chunks are injected into the AI's context as a system message using the `rag_context_prompt` template (the `{chunks}` placeholder is replaced with the retrieved text)
 5. The AI answers as normal, but now has access to your private data
+
+The default context prompt instructs the model to treat the retrieved chunks as its **primary source** and say "I don't have that information in my knowledge base" if the answer isn't found there. Customise via `.env`:
+
+```env
+AI_CHATBOX_RAG_CONTEXT_PROMPT="Use only the following context to answer:\n\n{chunks}\n\nDo not use any other knowledge."
+```
+
+Leave `{chunks}` in the prompt — the retrieved text is inserted there. If `{chunks}` is absent, the chunks are appended after the prompt text.
 
 > **Performance note:** Similarity is computed in PHP for simplicity and works well for up to a few thousand chunks. For very large knowledge bases, publish the migrations and switch to a database with native vector support (e.g. `pgvector` for PostgreSQL).
 
@@ -687,7 +687,25 @@ AI_CHATBOX_MARKDOWN=false
 
 ## Dark Mode
 
+### Chat widget
+
 The widget automatically adapts to the user's OS/browser dark mode preference via `prefers-color-scheme: dark`. No configuration required.
+
+### RAG admin UI
+
+The RAG admin page (`/ai-chatbox/rag`) supports three modes, controlled by `color_scheme`:
+
+| Value | Behaviour |
+|---|---|
+| `auto` *(default)* | Follows the user's OS/browser preference — updates live when the OS setting changes |
+| `light` | Always light |
+| `dark` | Always dark |
+
+```env
+AI_CHATBOX_COLOR_SCHEME=auto    # OS preference (default)
+AI_CHATBOX_COLOR_SCHEME=light   # force light
+AI_CHATBOX_COLOR_SCHEME=dark    # force dark
+```
 
 ---
 

@@ -113,7 +113,7 @@ class ChatboxController extends Controller
         : $userMessage;
 
         $ragMessages = $this->ragContext($userMessage);
-        $messages = array_merge($ragMessages, $systemMessages, $history);
+        $messages = array_merge($systemMessages, $history, $ragMessages);
         $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
@@ -240,7 +240,7 @@ class ChatboxController extends Controller
         }
 
         $ragMessages = $this->ragContext($userMessage);
-        $messages = array_merge($ragMessages, $systemMessages, $history);
+        $messages = array_merge($systemMessages, $history, $ragMessages);
         $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
@@ -566,8 +566,12 @@ class ChatboxController extends Controller
 
     /**
      * Retrieve relevant RAG context chunks for the given query and return
-     * them as a formatted system message array ready to prepend to $messages.
+     * them as a formatted system message to inject just before the user turn.
      * Returns an empty array when RAG is disabled or retrieval yields nothing.
+     *
+     * Placement: appended AFTER history so the context sits closest to the
+     * user's question — models (especially smaller ones) pay most attention
+     * to content near the end of the context window.
      *
      * @return array<int, array{role: string, content: string}>
      */
@@ -585,10 +589,14 @@ class ChatboxController extends Controller
                 return [];
             }
 
-            $context = "Relevant context from the knowledge base:\n\n"
-            . implode("\n\n---\n\n", $chunks);
+            $joined = implode("\n\n---\n\n", $chunks);
+            $prompt = config('ai-chatbox.rag_context_prompt', '');
 
-            return [['role' => 'system', 'content' => $context]];
+            $content = str_contains($prompt, '{chunks}')
+            ? str_replace('{chunks}', $joined, $prompt)
+            : ($prompt !== '' ? $prompt . "\n\n" . $joined : $joined);
+
+            return [['role' => 'system', 'content' => $content]];
 
         } catch (\Throwable $e) {
             Log::warning('AI Chatbox RAG retrieval failed', ['error' => $e->getMessage()]);

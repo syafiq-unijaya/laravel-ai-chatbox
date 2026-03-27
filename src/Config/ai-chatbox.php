@@ -131,6 +131,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Color Scheme (Admin RAG UI)
+    |--------------------------------------------------------------------------
+    | Controls whether the RAG admin page renders in light or dark mode.
+    |
+    | 'auto'  — follows the user's OS / browser preference (default)
+    | 'light' — always light
+    | 'dark'  — always dark
+    */
+
+    'color_scheme' => env('AI_CHATBOX_COLOR_SCHEME', 'auto'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Markdown Rendering
     |--------------------------------------------------------------------------
     | When enabled, AI replies are rendered as Markdown (bold, italics, lists,
@@ -284,7 +297,45 @@ return [
     'rag_top_k' => (int) env('AI_CHATBOX_RAG_TOP_K', 3),
     'rag_chunk_size' => (int) env('AI_CHATBOX_RAG_CHUNK_SIZE', 500),
     'rag_chunk_overlap' => (int) env('AI_CHATBOX_RAG_CHUNK_OVERLAP', 50),
-    'rag_similarity_threshold' => (float) env('AI_CHATBOX_RAG_THRESHOLD', 0.3),
+    'rag_similarity_threshold' => (float) env('AI_CHATBOX_RAG_THRESHOLD', 0.2),
     'rag_admin_middleware' => ['web', 'auth'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | RAG Context Prompt
+    |--------------------------------------------------------------------------
+    | Instruction prepended to the retrieved context block sent to the AI.
+    | This tells the model to prioritize the knowledge-base content over its
+    | general training data. Tune this for your model or use case.
+    |
+    | Use {chunks} as the placeholder where the retrieved text will be inserted.
+    | If {chunks} is absent, the retrieved text is appended after the prompt.
+    |
+    | Set to empty string to send the raw chunks with no additional instruction.
+    */
+    'rag_context_prompt' => env(
+        'AI_CHATBOX_RAG_CONTEXT_PROMPT',
+        "Use the following knowledge-base excerpts as your PRIMARY source when answering. "
+        . "Prioritize this context over your general knowledge. "
+        . "If the answer is not found in the context, say \"I don't have that information in my knowledge base.\"\n\n"
+        . "Context:\n{chunks}"
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | RAG Processing Time Limit
+    |--------------------------------------------------------------------------
+    | Maximum seconds PHP is allowed to spend on a single document upload
+    | (chunking + embedding all chunks). Embedding each chunk makes one HTTP
+    | call to the embedding API, so large documents on slow local models can
+    | easily exceed PHP's default 30-second limit.
+    |
+    | 0 = no limit (recommended for local models, default)
+    | 300 = 5 minutes (a safe upper bound for most use cases)
+    |
+    | This only affects the RAG admin upload/reprocess request — all other
+    | requests use the normal PHP max_execution_time.
+    */
+    'rag_processing_timeout' => (int) env('AI_CHATBOX_RAG_PROCESSING_TIMEOUT', 0),
 
 ];

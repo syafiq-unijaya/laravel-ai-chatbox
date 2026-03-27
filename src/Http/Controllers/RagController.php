@@ -23,6 +23,8 @@ class RagController extends Controller
             'ragEnabled' => (bool) config('ai-chatbox.rag_enabled'),
             'embeddingUrl' => config('ai-chatbox.rag_embedding_url'),
             'embeddingModel' => config('ai-chatbox.rag_embedding_model'),
+            'themeColor' => config('ai-chatbox.theme_color', '#4f46e5'),
+            'colorScheme' => config('ai-chatbox.color_scheme', 'auto'),
         ]);
     }
 
@@ -109,6 +111,10 @@ class RagController extends Controller
 
     private function processDocument(RagDocument $document, string $content): void
     {
+        // Embedding N chunks via HTTP can take well over 30 s on local models.
+        // Lift PHP's execution time limit for this admin-only operation.
+        set_time_limit((int) config('ai-chatbox.rag_processing_timeout', 0));
+
         $chunker = new DocumentChunker();
         $embedSvc = new EmbeddingService();
         $chunkSize = (int) config('ai-chatbox.rag_chunk_size', 500);
