@@ -8,23 +8,74 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.2.3] — 2026-03-27
+
 ### Added
-- **3-layer architecture** — the package is now organized into three explicit layers:
+- **`rag_embedding_timeout` config key** (`AI_CHATBOX_EMBEDDING_TIMEOUT`, default `10`) — dedicated timeout in seconds for embedding API calls; previously the embedding HTTP client was hardcoded to 60 s regardless of model speed
+- `EmbeddingService` now accepts an optional `$timeout` constructor parameter; `RagController` passes the active provider's resolved timeout when instantiating the service
+
+### Fixed
+- **LM Studio default provider config** — default `api_url` and `rag_embedding_url` changed from `localhost` to `127.0.0.1` to avoid DNS resolution issues on some Windows setups; default `api_model` updated to `phi-3.5-mini-instruct`; default `rag_embedding_model` updated to `text-embedding-nomic-embed-text-v1.5`
+
+---
+
+## [0.2.2] — 2026-03-27
+
+### Added
+- **`EmbeddingService` constructor injection** — `EmbeddingService` now accepts optional `$url`, `$model`, `$token` constructor parameters so it can be instantiated with per-provider settings; falls back to config values when parameters are `null`
+- **`RagController` active-provider awareness** — embedding config (URL, model, token) is now resolved through the active provider (`active_provider` config key) rather than always reading the top-level config; switching providers via `.env` now also updates which embedding endpoint is used
+- **Expanded test suite** — added `AdminDiagnosticsTest`, `EmbeddingServiceTest`, expanded `AiManagerTest`, `RagDocumentTest`, `HealthCheckTest`, `SendMessageTest`, `StreamMessageTest`; `TestCase` base class updated to expose `mockGuzzle()` helper for HTTP mocking
+- Admin dashboard and RAG Knowledge Base UI polish
+
+---
+
+## [0.2.1] — 2026-03-27
+
+### Added
+- **3-layer architecture** — the package is now organised into three explicit layers:
   - **Layer 1 — AI Engine** (`src/Engine/`): `AiEngineInterface`, `OpenAiCompatibleEngine`, `PromptBuilder`, `HealthChecker`, `AiEngineException`. All HTTP calls, prompt assembly, error classification, and health checks live here.
   - **Layer 2 — Memory** (`src/Memory/`): `ConversationRepositoryInterface`, `SessionConversationRepository`, `DatabaseConversationRepository`, `ContextManager`, `Conversation` model, `Message` model. All history persistence and context trimming live here.
-  - **Layer 3 — UI** (`src/Http/Controllers/`, `src/resources/`): `ChatboxController` now only handles HTTP request/response and delegates entirely to Layers 1 and 2.
-- **Database memory driver** — new `memory_driver` config key (`AI_CHATBOX_MEMORY_DRIVER`, default `session`). Set to `database` to persist conversation history in the `ai_chatbox_conversations` / `ai_chatbox_messages` tables; history then survives browser sessions and is queryable via Eloquent.
-- **New migrations**: `ai_chatbox_conversations` (thread_id, user_id) and `ai_chatbox_messages` (conversation_id, role, content) — auto-loaded when `memory_driver=database`.
-- **`AiEngineInterface`** — public contract for the AI engine; implement it to add a custom provider (e.g. Anthropic, Gemini, Cohere) and bind it in the service provider.
-- **`ConversationRepositoryInterface`** — public contract for the memory layer; implement it to add a custom storage backend (e.g. Redis, MongoDB).
-- **`beginStream()`** on the engine — establishes the AI HTTP connection before `response()->stream()` starts, so network errors still return a proper JSON error response (non-200) rather than a corrupted stream.
+  - **Layer 3 — UI** (`src/Http/Controllers/`, `src/resources/`): `ChatboxController` handles HTTP request/response only and delegates entirely to Layers 1 and 2.
+- **`AI` facade** (`SyafiqUnijaya\AiChatbox\AI`) — call `AI::chat($prompt)` or `AI::provider('openai')->chat($prompt)` from any controller, job, or service
+- **`AiManager`** — resolves named providers from the `providers` config group, merging each entry with the global defaults
+- **`AiProvider`** — fluent immutable wrapper; each modifier (`withModel`, `withTemperature`, `withSystemPrompt`, `withLanguage`, `withMaxTokens`, `withTimeout`, `withConfig`) returns a new cloned instance so the original is never mutated
+- **`AiEngineInterface`** — public contract for the AI engine; implement it to add a custom provider (e.g. Anthropic, Gemini, Cohere) and bind it in the service provider
+- **`ConversationRepositoryInterface`** — public contract for the memory layer; implement it to add a custom storage backend (e.g. Redis, MongoDB)
+- **`beginStream()`** on the engine — establishes the AI HTTP connection before `response()->stream()` starts, so network errors can still return a proper JSON error response (non-200) rather than a corrupted SSE stream
+- **Database memory driver** — new `memory_driver` config key (`AI_CHATBOX_MEMORY_DRIVER`, default `session`). Set to `database` to persist conversation history in the `ai_chatbox_conversations` / `ai_chatbox_messages` tables; history survives PHP session expiry and is queryable via Eloquent
+- **New migrations**: `ai_chatbox_conversations` (thread_id, user_id) and `ai_chatbox_messages` (conversation_id, role, content) — auto-loaded; no manual registration required
+- **`active_provider` config key** (`AI_CHATBOX_ACTIVE_PROVIDER`, default `ollama`) — point the chatbox widget at a named provider without duplicating credentials
+- **`providers` config group** — define named providers (`ollama`, `openai`, `groq`, `lmstudio`); each entry only needs the keys that differ from the global defaults; all other settings are inherited automatically
+- **`AdminController`** and admin views (`admin.blade.php`, `admin-conversations.blade.php`) — admin dashboard with configuration diagnostics, stat cards, named provider overview, and async-paginated conversations viewer with message modal
+- New admin routes: `GET /ai-chatbox/admin`, `GET /ai-chatbox/admin/conversations`, `GET /ai-chatbox/admin/conversations/data`, `GET /ai-chatbox/admin/conversations/{id}/messages`
+- Expanded test suite: `AiFacadeTest`, `AiManagerTest`, `AiProviderTest` (unit), `ContextManagerTest` (unit), `PromptBuilderTest` (unit), `DatabaseMemoryTest`
 
 ### Changed
 - `ChatboxController` reduced from ~600 lines to ~120 lines — pure HTTP I/O, no business logic
-- Error classification (`E01`–`E19`) moved from `ChatboxController` to `OpenAiCompatibleEngine` (now `public` methods, directly testable)
+- Error classification (`E01`–`E19`) moved from `ChatboxController` to `OpenAiCompatibleEngine` (now public methods, directly testable)
 - `ErrorClassificationTest` updated to target `OpenAiCompatibleEngine` directly (no more reflection into the controller)
-- Expanded `composer.json` keywords for better Packagist discoverability (added `rag`, `retrieval-augmented-generation`, `embeddings`, `vector-search`, `streaming`, `sse`, `vue3`, `local-ai`, `ai-assistant`, and more)
+- Expanded `composer.json` keywords for better Packagist discoverability
 - Updated package description in `composer.json` to reflect RAG and streaming capabilities
+
+---
+
+## [0.2.0] — 2026-03-27
+
+### Added
+- **Four frontend drivers** — the `frontend` config key (`AI_CHATBOX_FRONTEND`) controls which UI `@aichatbox` renders:
+  - `vue` *(default)* — pre-compiled Vue 3 SFC bundle; zero config, no CDN calls
+  - `blade` — self-contained vanilla JS widget; no framework dependency; `marked.js` + `DOMPurify` loaded from CDN only when `markdown=true`
+  - `livewire` — Alpine.js widget mounted via Livewire 3; Alpine.js is bundled automatically by Livewire
+  - `none` — outputs only `window.AiChatboxConfig`; use this when bringing your own React/Svelte/Vue component
+- **`@aichatboxConfig` Blade directive** — outputs only `window.AiChatboxConfig` regardless of the `frontend` setting; useful when mounting `<livewire:ai-chatbox />` independently or building a custom frontend
+- **Livewire component** (`ai-chatbox`) — auto-registered when `livewire/livewire` is installed; mount anywhere with `<livewire:ai-chatbox />`
+- **`chatbox-config.blade.php`** — shared config injector view extracted from the main chatbox view; all drivers read `window.AiChatboxConfig`
+- **`chatbox-blade.blade.php`** — new vanilla JS driver; identical HTML structure and CSS class names as the Vue driver; no compilation required
+
+### Changed
+- `chatbox.blade.php` refactored into a dispatcher — reads `frontend` config and includes the appropriate driver partial
 
 ---
 
@@ -236,7 +287,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Configurable API URL, token, and model via `.env`
 - Service provider with auto-discovery, asset publishing, and view publishing
 
-[Unreleased]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.1.9...HEAD
+[Unreleased]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.3...HEAD
+[0.2.3]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.2...0.2.3
+[0.2.2]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.1...0.2.2
+[0.2.1]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.0...0.2.1
+[0.2.0]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.1.9...0.2.0
 [0.1.9]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.1.8...0.1.9
 [0.1.8]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.1.7...0.1.8
 [0.1.7]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.1.6...0.1.7

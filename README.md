@@ -1066,6 +1066,134 @@ The Livewire component is auto-registered by the service provider when `livewire
 
 ---
 
+## Architecture
+
+The package is organised into three explicit layers:
+
+```
+┌──────────────────────────────────────────────────┐
+│  Layer 3 — UI                                    │
+│  ChatboxController, RagController, AdminController│
+│  Blade views, Vue 3 / Blade / Livewire drivers   │
+│  Handles HTTP request/response only              │
+├──────────────────────────────────────────────────┤
+│  Layer 2 — Memory                                │
+│  ContextManager                                  │
+│  SessionConversationRepository                   │
+│  DatabaseConversationRepository                  │
+│  Conversation + Message models                   │
+│  All history persistence and context trimming    │
+├──────────────────────────────────────────────────┤
+│  Layer 1 — AI Engine                             │
+│  OpenAiCompatibleEngine (AiEngineInterface)      │
+│  PromptBuilder, HealthChecker                    │
+│  AiEngineException (E01–E19 error codes)         │
+│  All HTTP calls, prompt assembly, error handling │
+└──────────────────────────────────────────────────┘
+```
+
+Each layer communicates only with the layer above or below it. Controllers delegate entirely to the Engine and Memory layers — they contain no business logic.
+
+---
+
+## Extending the Package
+
+### Custom AI engine
+
+Implement `AiEngineInterface` to support a provider that is not OpenAI-compatible (e.g. Anthropic, Gemini, Cohere):
+
+```php
+use SyafiqUnijaya\AiChatbox\Engine\Contracts\AiEngineInterface;
+use SyafiqUnijaya\AiChatbox\Engine\Exceptions\AiEngineException;
+
+class AnthropicEngine implements AiEngineInterface
+{
+    public function validateConfig(array $options): void
+    {
+        if (empty($options['api_token'])) {
+            throw new AiEngineException('API token missing', 'E03');
+        }
+    }
+
+    public function complete(array $messages, array $options = []): string
+    {
+        // HTTP call to Anthropic Messages API
+        // Return the assistant reply as a plain string
+    }
+
+    public function stream(array $messages, array $options, callable $onToken): string
+    {
+        // Stream tokens via $onToken('word'), return full assembled reply
+    }
+
+    public function beginStream(array $messages, array $options): \Closure
+    {
+        // Open the HTTP connection here (before response()->stream() starts)
+        // Return a closure: fn(callable $onToken): string
+        $this->validateConfig($options);
+        // ... establish connection ...
+        return function (callable $onToken): string {
+            // read stream, call $onToken per token, return full reply
+        };
+    }
+}
+```
+
+Bind it in a service provider:
+
+```php
+use SyafiqUnijaya\AiChatbox\Engine\Contracts\AiEngineInterface;
+
+$this->app->bind(AiEngineInterface::class, AnthropicEngine::class);
+```
+
+---
+
+### Custom memory driver
+
+Implement `ConversationRepositoryInterface` to store conversation history in Redis, MongoDB, or any other backend:
+
+```php
+use SyafiqUnijaya\AiChatbox\Memory\Contracts\ConversationRepositoryInterface;
+
+class RedisConversationRepository implements ConversationRepositoryInterface
+{
+    public function getHistory(string $threadId): array
+    {
+        return json_decode(Redis::get("chat:{$threadId}") ?? '[]', true);
+    }
+
+    public function saveHistory(string $threadId, array $history): void
+    {
+        Redis::set("chat:{$threadId}", json_encode($history));
+    }
+
+    public function trimToLimit(string $threadId, int $maxPairs): void
+    {
+        $history = $this->getHistory($threadId);
+        // keep last $maxPairs pairs
+        $this->saveHistory($threadId, array_slice($history, -($maxPairs * 2)));
+    }
+
+    public function clear(string $threadId): void
+    {
+        Redis::del("chat:{$threadId}");
+    }
+}
+```
+
+Bind it in a service provider:
+
+```php
+use SyafiqUnijaya\AiChatbox\Memory\Contracts\ConversationRepositoryInterface;
+
+$this->app->bind(ConversationRepositoryInterface::class, RedisConversationRepository::class);
+```
+
+> The built-in `session` and `database` drivers are selected at runtime via the `memory_driver` config key. Binding a custom implementation directly overrides this selection.
+
+---
+
 ## Troubleshooting
 
 If the chatbox shows an offline toast or requests fail, check `storage/logs/laravel.log` for an error code (`E01`–`E19`). Full reference: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
