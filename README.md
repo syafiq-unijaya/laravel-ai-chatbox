@@ -6,7 +6,7 @@
 [![PHP](https://img.shields.io/packagist/php-v/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
 [![License](https://img.shields.io/packagist/l/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
 
-A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required.
+A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required on your end.
 
 Messages are proxied through your Laravel backend to any OpenAI-compatible API.
 
@@ -18,7 +18,6 @@ Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
 
 - PHP 8.2+
 - Laravel 10 / 11 / 12
-- jQuery (optional — falls back to native `fetch`)
 
 ---
 
@@ -309,7 +308,7 @@ AI_CHATBOX_HEALTH_CHECK=false
 
 ## Markdown Rendering
 
-AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify), both loaded from CDN with [Subresource Integrity (SRI)](https://developer.mozilla.org/en-US/docs/Web/Security/Subresource_Integrity) hashes. The browser will refuse to execute either library if the CDN serves tampered content. Supported elements:
+AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify), both **bundled into the widget's JavaScript asset** — no CDN calls or external scripts required. Supported elements:
 
 - Bold, italic, strikethrough
 - Bullet and numbered lists

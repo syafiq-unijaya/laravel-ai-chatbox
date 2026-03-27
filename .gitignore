@@ -1,1 +1,15 @@
+# PHP dependencies
 vendor/
+
+# Node dependencies & build artifacts
+node_modules/
+package-lock.json
+
+# Test cache
+.phpunit.result.cache
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
