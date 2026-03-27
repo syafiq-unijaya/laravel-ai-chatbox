@@ -342,6 +342,35 @@ class SendMessageTest extends TestCase
         $this->assertDatabaseCount('ai_chatbox_messages', 4); // 2 pairs
     }
 
+    // ── Active provider routing ───────────────────────────────────────────────
+
+    public function test_send_message_routes_through_active_provider(): void
+    {
+        // Top-level api_url/token are empty — would give E01/E03 if effectiveConfig() is ignored
+        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.api_token', '');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'myprovider' => [
+                'api_url'   => 'http://active.example.com/v1/chat/completions',
+                'api_token' => 'active-token',
+                'api_model' => 'active-model',
+            ],
+        ]);
+        $this->app['config']->set('ai-chatbox.active_provider', 'myprovider');
+
+        $this->mockGuzzle([
+            new Response(200, ['Content-Type' => 'application/json'], json_encode([
+                'choices' => [['message' => ['content' => 'Reply from active provider']]],
+            ])),
+        ]);
+
+        $this->postJson('/ai-chatbox/message', ['message' => 'Hello'])
+            ->assertOk()
+            ->assertJsonFragment(['reply' => 'Reply from active provider']);
+    }
+
+    // ── Database memory driver ────────────────────────────────────────────────
+
     public function test_database_driver_history_limit_caps_stored_messages(): void
     {
         $this->useDatabase();

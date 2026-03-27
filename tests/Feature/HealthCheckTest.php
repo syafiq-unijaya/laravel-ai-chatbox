@@ -149,4 +149,37 @@ class HealthCheckTest extends TestCase
             ->assertStatus(503)
             ->assertJsonFragment(['message' => 'Custom offline message.']);
     }
+
+    // ── Active provider routing ───────────────────────────────────────────────
+
+    public function test_health_check_uses_active_provider_url(): void
+    {
+        // Top-level api_url is empty — would give E01 if health check ignores active_provider
+        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'myprovider' => [
+                'api_url'   => 'http://active.example.com/v1/chat',
+                'api_token' => 'active-token',
+                'api_model' => 'active-model',
+            ],
+        ]);
+        $this->app['config']->set('ai-chatbox.active_provider', 'myprovider');
+
+        $this->mockGuzzle([new Response(200)]);
+
+        $this->getJson('/ai-chatbox/health')
+            ->assertOk()
+            ->assertJsonFragment(['status' => 'online']);
+    }
+
+    public function test_health_check_with_active_provider_default_uses_top_level(): void
+    {
+        $this->app['config']->set('ai-chatbox.active_provider', 'default');
+
+        $this->mockGuzzle([new Response(200)]);
+
+        $this->getJson('/ai-chatbox/health')
+            ->assertOk()
+            ->assertJsonFragment(['status' => 'online']);
+    }
 }

@@ -96,6 +96,37 @@ class AiManagerTest extends TestCase
         $this->app->make(AiManager::class)->provider('doesnotexist');
     }
 
+    // ── resolveConfig (public API) ────────────────────────────────────────────
+
+    public function test_resolve_config_default_returns_full_base_config(): void
+    {
+        $config = $this->app->make(AiManager::class)->resolveConfig('default');
+
+        $this->assertIsArray($config);
+        $this->assertArrayHasKey('api_url', $config);
+        $this->assertArrayHasKey('api_token', $config);
+        $this->assertArrayHasKey('api_model', $config);
+    }
+
+    public function test_resolve_config_named_overrides_api_keys_and_inherits_rest(): void
+    {
+        $this->app['config']->set('ai-chatbox.api_url',     'http://base.example.com');
+        $this->app['config']->set('ai-chatbox.temperature', 0.42);
+        $this->app['config']->set('ai-chatbox.providers', [
+            'fast' => [
+                'api_url'   => 'http://fast.example.com',
+                'api_token' => 'fast-token',
+                'api_model' => 'fast-model',
+            ],
+        ]);
+
+        $config = $this->app->make(AiManager::class)->resolveConfig('fast');
+
+        $this->assertSame('http://fast.example.com', $config['api_url']);  // overridden
+        $this->assertSame('fast-token',              $config['api_token']); // overridden
+        $this->assertSame(0.42,                      $config['temperature']); // inherited
+    }
+
     // ── __call delegation ─────────────────────────────────────────────────────
 
     public function test_manager_is_singleton(): void

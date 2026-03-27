@@ -158,6 +158,31 @@ class StreamMessageTest extends TestCase
             ->assertJsonFragment(['code' => 'E07']);
     }
 
+    // ── Active provider routing ───────────────────────────────────────────────
+
+    public function test_stream_routes_through_active_provider(): void
+    {
+        // Top-level api_url/token are empty — would give E01/E03 if effectiveConfig() is ignored
+        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.api_token', '');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'streamprovider' => [
+                'api_url'   => 'http://stream.example.com/v1/chat/completions',
+                'api_token' => 'stream-token',
+                'api_model' => 'stream-model',
+            ],
+        ]);
+        $this->app['config']->set('ai-chatbox.active_provider', 'streamprovider');
+
+        $this->mockGuzzle([$this->streamResponse(['Active', ' reply'])]);
+
+        $body = $this->postJson('/ai-chatbox/stream', ['message' => 'Hi'])
+            ->streamedContent();
+
+        $this->assertStringContainsString('data: {"token":"Active"}', $body);
+        $this->assertStringContainsString('data: {"token":" reply"}', $body);
+    }
+
     // ── Nginx buffering header ────────────────────────────────────────────────
 
     public function test_response_sets_x_accel_buffering_off(): void

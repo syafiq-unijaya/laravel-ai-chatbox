@@ -192,10 +192,9 @@ class AdminController extends Controller
         }
 
         // — Security —
-        if (config('app.debug') && config('app.env') === 'production') {
+        $prodEnvs = ['production', 'prod', 'live'];
+        if (config('app.debug') && in_array(strtolower(config('app.env', '')), $prodEnvs)) {
             $diagnostics[] = ['level' => 'error', 'group' => 'Security', 'message' => 'APP_DEBUG is true in production. This can expose stack traces, API tokens, and environment variables to end users.'];
-        } elseif (config('app.debug')) {
-            $diagnostics[] = ['level' => 'warning', 'group' => 'Security', 'message' => 'APP_DEBUG is enabled. Disable it before deploying to production.'];
         }
         if (empty($cfg['ssrf_protection']) || $cfg['ssrf_protection'] === false) {
             $diagnostics[] = ['level' => 'warning', 'group' => 'Security', 'message' => 'ssrf_protection is disabled. Enable it to block requests to internal/private network addresses.'];

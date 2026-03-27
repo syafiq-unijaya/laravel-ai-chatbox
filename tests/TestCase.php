@@ -40,6 +40,11 @@ abstract class TestCase extends Orchestra
         $app['config']->set('ai-chatbox.rag_enabled', false);
         $app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
         $app['config']->set('ai-chatbox.rag_embedding_model', 'test-embed');
+
+        // Pin to 'default' so effectiveConfig() uses top-level api_url/token/model set above.
+        // Individual tests that want to test active_provider routing opt in by overriding this.
+        $app['config']->set('ai-chatbox.active_provider', 'default');
+        $app['config']->set('ai-chatbox.providers', []);
     }
 
     /**
