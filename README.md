@@ -18,10 +18,12 @@ Messages are proxied through your Laravel backend to any **OpenAI-compatible API
 
 - **One-line integration** — drop `@aichatbox` anywhere in a Blade layout
 - **Vue 3 frontend** — reactive widget with no jQuery or external CDN dependencies
-- **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, or any OpenAI-compatible endpoint
+- **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, LM Studio, or any OpenAI-compatible endpoint
 - **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify`, both bundled (no CDN)
-- **Conversation history** — server-side session memory with configurable turn limit
-- **Browser persistence** — chat history survives page refresh via `localStorage` or `sessionStorage`
+- **Conversation threads** — each conversation gets a unique UUID thread; start a fresh thread any time without losing context of others
+- **Session memory** — server-side history per thread with configurable turn limit; context is automatically sent back to the AI on every message
+- **Token-based context trimming** — history is trimmed oldest-first by estimated token count to keep requests within your model's context window
+- **Message storage** — chat bubbles persist across page refresh via `localStorage` or `sessionStorage`, scoped per user and per app
 - **Health check** — pings the AI service before opening; shows an offline toast if unreachable
 - **Sound notifications** — Web Audio API ping on AI reply, no audio file needed
 - **Dark mode** — automatic via `prefers-color-scheme`
@@ -152,12 +154,13 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `temperature` | `AI_CHATBOX_TEMPERATURE` | `0.7` | Creativity — `0.0` deterministic, `1.0` creative |
 | `max_tokens` | `AI_CHATBOX_MAX_TOKENS` | `null` | Max reply length — `null` lets the model decide |
 
-### Conversation History
+### Conversation History & Threads
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `history_enabled` | `AI_CHATBOX_HISTORY` | `true` | Send previous messages for context |
-| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `50` | Max user+assistant pairs kept in session |
+| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `50` | Max user+assistant pairs kept per thread in session |
+| `context_token_limit` | `AI_CHATBOX_CONTEXT_TOKENS` | `4000` | Max estimated tokens of history to include per request — trims oldest pairs first |
 
 ### Routes & Middleware
 
@@ -377,6 +380,95 @@ AI_CHATBOX_HEALTH_CHECK=false
 
 ---
 
+## Conversation Threads
+
+Each time a user first opens the chatbox, a **UUID v4 thread ID** is generated in the browser and stored in `localStorage` (or `sessionStorage`). This ID is sent with every message request and used to scope the server-side session history — so multiple independent conversations never share context.
+
+**New conversation** — the pencil icon (✏️) in the chat header starts a fresh thread. A new UUID is generated, the previous thread's server-side history is left to expire naturally, and the client display is reset. This is distinct from the trash icon which clears the *current* thread's history.
+
+```
+Thread A (UUID: 550e8400...)  →  session key: ai_chatbox_history_550e8400...
+Thread B (UUID: 6ba7b810...)  →  session key: ai_chatbox_history_6ba7b810...
+```
+
+Thread IDs survive page refresh — the same conversation context is restored when the user returns.
+
+---
+
+## Session Memory
+
+When `history_enabled` is `true` (default), every user message and AI reply is stored in the PHP session under the current thread's key and sent back to the AI on every subsequent request, giving the model memory of the full conversation.
+
+```env
+AI_CHATBOX_HISTORY=true
+AI_CHATBOX_HISTORY_LIMIT=50    # max message pairs kept per thread
+```
+
+Set `AI_CHATBOX_HISTORY=false` to make each message completely standalone (no context sent):
+
+```env
+AI_CHATBOX_HISTORY=false
+```
+
+---
+
+## Token Control
+
+The package provides two layers of control over how many tokens are sent to the AI per request.
+
+### Response tokens (`max_tokens`)
+
+Limits how long the AI's reply can be. Leave unset to let the model decide:
+
+```env
+AI_CHATBOX_MAX_TOKENS=512    # short replies
+AI_CHATBOX_MAX_TOKENS=2048   # longer replies
+# unset = model default
+```
+
+### Context tokens (`context_token_limit`)
+
+Limits how much conversation history is included in each request. History is trimmed oldest-pair-first until the estimated token count falls below the threshold. Uses a ~4 characters per token heuristic.
+
+```env
+AI_CHATBOX_CONTEXT_TOKENS=4000    # phi3:mini, llama3 8B (default)
+AI_CHATBOX_CONTEXT_TOKENS=8000    # llama3 70B, Mixtral
+AI_CHATBOX_CONTEXT_TOKENS=32000   # GPT-4o, Claude
+AI_CHATBOX_CONTEXT_TOKENS=0       # disable — rely on history_limit only
+```
+
+Both limits work together: `history_limit` caps by message count, `context_token_limit` caps by estimated tokens. Whichever is reached first takes effect.
+
+### Creativity (`temperature`)
+
+```env
+AI_CHATBOX_TEMPERATURE=0.2   # focused, deterministic
+AI_CHATBOX_TEMPERATURE=0.7   # balanced (default)
+AI_CHATBOX_TEMPERATURE=1.0   # creative, unpredictable
+```
+
+---
+
+## Message Storage
+
+Chat messages are stored on two layers:
+
+| Layer | Driver | Lifetime | Scope |
+|---|---|---|---|
+| **Browser** | `localStorage` *(default)* | Persists across sessions | Per app + per user + per thread |
+| **Browser** | `sessionStorage` | Cleared on tab close | Per app + per user + per thread |
+| **Server** | PHP session | Until session expires | Per thread ID |
+
+The browser storage key is automatically scoped to prevent history leaking between different applications or different authenticated users on the same browser.
+
+Switch to session storage for more privacy-sensitive applications:
+
+```env
+AI_CHATBOX_STORAGE=session
+```
+
+---
+
 ## Markdown Rendering
 
 AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify), both **bundled into the widget's JavaScript asset** — no CDN calls or external scripts required. Supported elements:
@@ -445,7 +537,7 @@ If the chatbox shows an offline toast or requests fail, check `storage/logs/lara
 composer test
 ```
 
-The test suite covers all backend behaviour — controller responses, error classification, session history, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
+The test suite covers all backend behaviour — controller responses, error classification, session history, conversation thread isolation, token-based context trimming, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
 
 ---
 

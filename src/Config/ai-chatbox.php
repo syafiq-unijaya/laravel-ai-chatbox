@@ -182,6 +182,43 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Context Token Limit
+    |--------------------------------------------------------------------------
+    | Approximate maximum number of tokens to include from conversation history
+    | in each API request. History is trimmed oldest-first (by message pair)
+    | until the estimated token count falls below this threshold.
+    |
+    | Uses a ~4 characters per token estimate. Tune this to stay within your
+    | model's context window. Common values:
+    |   phi3:mini   → 4 000   (default)
+    |   llama3 8B   → 8 000
+    |   GPT-4o      → 32 000
+    |
+    | Set to 0 to disable token-based trimming (rely on history_limit only).
+    */
+
+    'context_token_limit' => env('AI_CHATBOX_CONTEXT_TOKENS', 4000),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token Streaming (Server-Sent Events)
+    |--------------------------------------------------------------------------
+    | When enabled, AI replies are streamed token-by-token to the browser via
+    | Server-Sent Events (SSE). The user sees the response being written in
+    | real time rather than waiting for the full reply.
+    |
+    | Set to false to fall back to the standard POST request/response cycle.
+    |
+    | Requires your AI provider to support stream: true (all OpenAI-compatible
+    | APIs and Ollama do). Ensure your web server does not buffer responses:
+    |   Nginx → proxy_buffering off  (set automatically via X-Accel-Buffering)
+    |   PHP   → disable output_buffering in php.ini for best results
+    */
+
+    'stream' => env('AI_CHATBOX_STREAM', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Client-side Storage Driver
     |--------------------------------------------------------------------------
     | Controls where chat history is persisted in the browser.

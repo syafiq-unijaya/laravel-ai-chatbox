@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatboxController extends Controller
 {
@@ -41,14 +42,15 @@ class ChatboxController extends Controller
     public function sendMessage(Request $request): JsonResponse
     {
         $request->validate([
-            'message' => ['required', 'string', 'max:2000'],
+            'message'   => ['required', 'string', 'max:2000'],
+            'thread_id' => ['nullable', 'string', 'max:36'],
         ]);
 
         $cfg = config('ai-chatbox');
 
-        $apiUrl = $cfg['api_url'] ?? '';
+        $apiUrl   = $cfg['api_url']   ?? '';
         $apiToken = $cfg['api_token'] ?? '';
-        $model = $cfg['api_model'] ?? '';
+        $model    = $cfg['api_model'] ?? '';
 
         if (empty($apiUrl)) {
             return $this->errorResponse(self::E01, 'AI API URL is not configured.', 500);
@@ -62,30 +64,53 @@ class ChatboxController extends Controller
             return $this->errorResponse(self::E04, 'Invalid model name configured.', 500);
         }
 
-        $timeout = $cfg['timeout'] ?? 30;
-        $language = $cfg['language'] ?? 'English';
-        $system = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
-        $useHistory = $cfg['history_enabled'] ?? true;
-        $historyLimit = (int) ($cfg['history_limit'] ?? 50);
-        $maxTokens = $cfg['max_tokens'] ?? null;
-        $temperature = (float) ($cfg['temperature'] ?? 0.7);
+        $timeout           = $cfg['timeout']            ?? 30;
+        $language          = $cfg['language']           ?? 'English';
+        $system            = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
+        $useHistory        = $cfg['history_enabled']    ?? true;
+        $historyLimit      = (int) ($cfg['history_limit']       ?? 50);
+        $contextTokenLimit = (int) ($cfg['context_token_limit'] ?? 4000);
+        $maxTokens         = $cfg['max_tokens']         ?? null;
+        $temperature       = (float) ($cfg['temperature'] ?? 0.7);
 
-        $messages = [];
+        $sessionKey  = $this->sessionKey($request->input('thread_id', ''));
+        $userMessage = $request->input('message');
 
+        $systemMessages = [];
         if (!empty($system)) {
-            $messages[] = ['role' => 'system', 'content' => $system];
+            $systemMessages[] = ['role' => 'system', 'content' => $system];
         }
 
-        $history = $useHistory ? $request->session()->get(self::SESSION_KEY, []) : [];
-        $messages = array_merge($messages, $history);
-        $userMessage = $request->input('message');
+        $history = $useHistory ? $request->session()->get($sessionKey, []) : [];
+
+        // Trim history by message-pair count
+        $maxEntries = $historyLimit * 2;
+        if (count($history) > $maxEntries) {
+            $history = array_slice($history, count($history) - $maxEntries);
+        }
+
+        // Trim history by approximate token count (4 chars ≈ 1 token)
+        if ($contextTokenLimit > 0) {
+            $apiMessage = (!empty($system) && !empty($language))
+                ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+                : $userMessage;
+
+            while (count($history) >= 2) {
+                $all = array_merge($systemMessages, $history, [['role' => 'user', 'content' => $apiMessage]]);
+                if ($this->estimateTokens($all) <= $contextTokenLimit) {
+                    break;
+                }
+                array_splice($history, 0, 2); // drop oldest user+assistant pair
+            }
+        }
 
         // Append language reminder only to the outgoing API payload, not to the
         // stored version, so history doesn't accumulate the suffix on every entry.
         $apiMessage = (!empty($system) && !empty($language))
-        ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
-        : $userMessage;
+            ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+            : $userMessage;
 
+        $messages   = array_merge($systemMessages, $history);
         $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
@@ -117,7 +142,7 @@ class ChatboxController extends Controller
             }
 
             if ($useHistory) {
-                $history[] = ['role' => 'user', 'content' => $request->input('message')];
+                $history[] = ['role' => 'user',      'content' => $userMessage];
                 $history[] = ['role' => 'assistant', 'content' => trim($reply)];
 
                 $maxEntries = $historyLimit * 2;
@@ -125,7 +150,7 @@ class ChatboxController extends Controller
                     $history = array_slice($history, count($history) - $maxEntries);
                 }
 
-                $request->session()->put(self::SESSION_KEY, $history);
+                $request->session()->put($sessionKey, $history);
             }
 
             return response()->json(['reply' => trim($reply)]);
@@ -151,9 +176,192 @@ class ChatboxController extends Controller
         }
     }
 
+    public function streamMessage(Request $request): StreamedResponse|JsonResponse
+    {
+        $request->validate([
+            'message'   => ['required', 'string', 'max:2000'],
+            'thread_id' => ['nullable', 'string', 'max:36'],
+        ]);
+
+        $cfg = config('ai-chatbox');
+
+        $apiUrl   = $cfg['api_url']   ?? '';
+        $apiToken = $cfg['api_token'] ?? '';
+        $model    = $cfg['api_model'] ?? '';
+
+        if (empty($apiUrl)) {
+            return $this->errorResponse(self::E01, 'AI API URL is not configured.', 500);
+        }
+        if (empty($apiToken)) {
+            return $this->errorResponse(self::E03, 'AI API token is not configured.', 500);
+        }
+        if (!empty($model) && !preg_match('/^[a-zA-Z0-9_:.\-]+$/', $model)) {
+            return $this->errorResponse(self::E04, 'Invalid model name configured.', 500);
+        }
+
+        $timeout           = $cfg['timeout']            ?? 30;
+        $language          = $cfg['language']           ?? 'English';
+        $system            = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
+        $useHistory        = $cfg['history_enabled']    ?? true;
+        $historyLimit      = (int) ($cfg['history_limit']       ?? 50);
+        $contextTokenLimit = (int) ($cfg['context_token_limit'] ?? 4000);
+        $temperature       = (float) ($cfg['temperature'] ?? 0.7);
+
+        $sessionKey  = $this->sessionKey($request->input('thread_id', ''));
+        $userMessage = $request->input('message');
+
+        $systemMessages = [];
+        if (!empty($system)) {
+            $systemMessages[] = ['role' => 'system', 'content' => $system];
+        }
+
+        $history = $useHistory ? $request->session()->get($sessionKey, []) : [];
+
+        $maxEntries = $historyLimit * 2;
+        if (count($history) > $maxEntries) {
+            $history = array_slice($history, count($history) - $maxEntries);
+        }
+
+        $apiMessage = (!empty($system) && !empty($language))
+            ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+            : $userMessage;
+
+        if ($contextTokenLimit > 0) {
+            while (count($history) >= 2) {
+                $all = array_merge($systemMessages, $history, [['role' => 'user', 'content' => $apiMessage]]);
+                if ($this->estimateTokens($all) <= $contextTokenLimit) {
+                    break;
+                }
+                array_splice($history, 0, 2);
+            }
+        }
+
+        $messages   = array_merge($systemMessages, $history);
+        $messages[] = ['role' => 'user', 'content' => $apiMessage];
+
+        try {
+            $client = $this->makeClient(['timeout' => $timeout]);
+
+            $response = $client->post($apiUrl, [
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $apiToken,
+                    'Content-Type'  => 'application/json',
+                    'Accept'        => 'application/json',
+                ],
+                'json' => array_filter([
+                    'model'       => $model,
+                    'messages'    => $messages,
+                    'temperature' => $temperature,
+                    'stream'      => true,
+                ], fn($v) => $v !== null),
+                'stream' => true,
+            ]);
+
+            $body = $response->getBody();
+
+            return response()->stream(
+                function () use ($body, $request, $sessionKey, $useHistory, $historyLimit, $userMessage, $history) {
+                    $fullReply = '';
+                    $buffer    = '';
+
+                    while (!$body->eof()) {
+                        $buffer .= $body->read(1024);
+
+                        // Process every complete line in the buffer
+                        while (($nl = strpos($buffer, "\n")) !== false) {
+                            $line   = rtrim(substr($buffer, 0, $nl), "\r");
+                            $buffer = substr($buffer, $nl + 1);
+
+                            if ($line === '' || str_starts_with($line, ':')) {
+                                continue; // SSE comment or blank keep-alive line
+                            }
+
+                            if ($line === 'data: [DONE]') {
+                                break 2;
+                            }
+
+                            // Strip SSE prefix (OpenAI-compatible) or parse raw JSON (Ollama native)
+                            $jsonStr = str_starts_with($line, 'data: ')
+                                ? substr($line, 6)
+                                : $line;
+
+                            $data = json_decode($jsonStr, true);
+                            if (!is_array($data)) {
+                                continue;
+                            }
+
+                            // OpenAI-compatible: choices[0].delta.content
+                            // Ollama native:     message.content
+                            $token = $data['choices'][0]['delta']['content']
+                                  ?? $data['message']['content']
+                                  ?? null;
+
+                            if ($token !== null && $token !== '') {
+                                $fullReply .= $token;
+
+                                echo 'data: ' . json_encode(['token' => $token]) . "\n\n";
+                                if (ob_get_level() > 0) ob_flush();
+                                flush();
+                            }
+
+                            // Ollama native signals end with done: true (emit token above first)
+                            if (($data['done'] ?? false) === true) {
+                                break 2;
+                            }
+                        }
+                    }
+
+                    // Persist completed reply to server-side session
+                    if ($useHistory && $fullReply !== '') {
+                        $history[] = ['role' => 'user',      'content' => $userMessage];
+                        $history[] = ['role' => 'assistant', 'content' => trim($fullReply)];
+
+                        $maxEntries = $historyLimit * 2;
+                        if (count($history) > $maxEntries) {
+                            $history = array_slice($history, count($history) - $maxEntries);
+                        }
+
+                        $request->session()->put($sessionKey, $history);
+                        $request->session()->save();
+                    }
+
+                    echo "data: [DONE]\n\n";
+                    if (ob_get_level() > 0) ob_flush();
+                    flush();
+                },
+                200,
+                [
+                    'Content-Type'      => 'text/event-stream',
+                    'Cache-Control'     => 'no-cache',
+                    'X-Accel-Buffering' => 'no',   // disable Nginx buffering
+                    'Connection'        => 'keep-alive',
+                ]
+            );
+
+        } catch (TooManyRedirectsException $e) {
+            return $this->errorResponse(self::E10, 'Unable to reach AI service. Please try again later.', 502, $e);
+
+        } catch (ConnectException $e) {
+            return $this->errorResponse(
+                $this->classifyConnectException($e),
+                'Unable to reach AI service. Please try again later.',
+                503,
+                $e
+            );
+
+        } catch (RequestException $e) {
+            $status = $e->hasResponse() ? $e->getResponse()->getStatusCode() : 500;
+            return $this->errorResponse($this->classifyHttpStatus($status), 'Unable to reach AI service. Please try again later.', $status, $e);
+
+        } catch (\Throwable $e) {
+            return $this->errorResponse(self::E19, 'Unable to reach AI service. Please try again later.', 500, $e);
+        }
+    }
+
     public function clearHistory(Request $request): JsonResponse
     {
-        $request->session()->forget(self::SESSION_KEY);
+        $sessionKey = $this->sessionKey($request->input('thread_id', ''));
+        $request->session()->forget($sessionKey);
 
         return response()->json(['status' => 'ok']);
     }
@@ -321,5 +529,30 @@ class ChatboxController extends Controller
             500, 502, 503, 504 => self::E16,
             default => self::E17,
         };
+    }
+
+    /**
+     * Return the session key scoped to the given thread ID.
+     * Falls back to the default key when no valid UUID v4 is provided,
+     * preserving backward compatibility with clients that don't send thread_id.
+     */
+    private function sessionKey(string $threadId): string
+    {
+        if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $threadId)) {
+            return self::SESSION_KEY . '_' . str_replace('-', '', strtolower($threadId));
+        }
+
+        return self::SESSION_KEY;
+    }
+
+    /**
+     * Estimate token count using the ~4 characters per token heuristic.
+     * Applies to the combined content of all messages.
+     */
+    private function estimateTokens(array $messages): int
+    {
+        $chars = array_sum(array_map(fn($m) => strlen($m['content'] ?? ''), $messages));
+
+        return (int) ceil($chars / 4);
     }
 }

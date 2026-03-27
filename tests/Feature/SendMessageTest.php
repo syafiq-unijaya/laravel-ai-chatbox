@@ -236,4 +236,87 @@ class SendMessageTest extends TestCase
         $this->assertCount(4, $history);
         $this->assertSame('msg2', $history[0]['content']);
     }
+
+    // ── Conversation threads ──────────────────────────────────────────────────
+
+    public function test_thread_id_scopes_history_to_its_own_session_key(): void
+    {
+        $threadId = '550e8400-e29b-4d4f-a716-446655440000';
+        $expectedKey = 'ai_chatbox_history_' . str_replace('-', '', $threadId);
+
+        $this->mockGuzzle([$this->openAiResponse('Reply A')]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'Hello', 'thread_id' => $threadId]);
+
+        $this->assertNotEmpty(session($expectedKey));
+        $this->assertNull(session('ai_chatbox_history')); // default key must be untouched
+    }
+
+    public function test_different_thread_ids_have_isolated_histories(): void
+    {
+        $threadA = '550e8400-e29b-4d4f-a716-446655440000';
+        $threadB = '6ba7b810-9dad-4d4f-80b4-00c04fd430c8';
+        $keyA    = 'ai_chatbox_history_' . str_replace('-', '', $threadA);
+        $keyB    = 'ai_chatbox_history_' . str_replace('-', '', $threadB);
+
+        $this->mockGuzzle([
+            $this->openAiResponse('Reply A'),
+            $this->openAiResponse('Reply B'),
+        ]);
+
+        $this->postJson('/ai-chatbox/message', ['message' => 'Thread A msg', 'thread_id' => $threadA]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'Thread B msg', 'thread_id' => $threadB]);
+
+        $this->assertSame('Thread A msg', session($keyA)[0]['content']);
+        $this->assertSame('Thread B msg', session($keyB)[0]['content']);
+    }
+
+    public function test_invalid_thread_id_falls_back_to_default_session_key(): void
+    {
+        $this->mockGuzzle([$this->openAiResponse('Hi')]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'Hello', 'thread_id' => 'not-a-valid-uuid']);
+
+        $this->assertNotEmpty(session('ai_chatbox_history'));
+    }
+
+    // ── Token-based context trimming ──────────────────────────────────────────
+
+    public function test_trims_history_when_context_token_limit_is_exceeded(): void
+    {
+        // Set a very tight token limit so even a small history gets trimmed
+        $this->app['config']->set('ai-chatbox.context_token_limit', 20);
+        $this->app['config']->set('ai-chatbox.history_limit', 100);
+
+        // Seed with a large history that would exceed 20 tokens (80+ chars)
+        session(['ai_chatbox_history' => [
+            ['role' => 'user',      'content' => 'this is a long first message that pushes over the limit'],
+            ['role' => 'assistant', 'content' => 'this is a long first assistant reply that also adds tokens'],
+            ['role' => 'user',      'content' => 'short'],
+            ['role' => 'assistant', 'content' => 'short'],
+        ]]);
+
+        $this->mockGuzzle([$this->openAiResponse('OK')]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'hi']);
+
+        // The full history + current message exceeds 20 tokens, so old pairs are dropped
+        // The stored history after the response should not have all 4 original entries + new pair
+        $history = session('ai_chatbox_history');
+        $this->assertNotEmpty($history);
+        // Verify the oldest long pair was pruned (first two entries should NOT be the very long ones)
+        $this->assertNotSame('this is a long first message that pushes over the limit', $history[0]['content']);
+    }
+
+    public function test_token_trimming_disabled_when_limit_is_zero(): void
+    {
+        $this->app['config']->set('ai-chatbox.context_token_limit', 0);
+        $this->app['config']->set('ai-chatbox.history_limit', 10);
+
+        session(['ai_chatbox_history' => [
+            ['role' => 'user',      'content' => str_repeat('a', 1000)],
+            ['role' => 'assistant', 'content' => str_repeat('b', 1000)],
+        ]]);
+
+        $this->mockGuzzle([$this->openAiResponse('Fine')]);
+        // No exception should be thrown; history passed as-is (only message-count limit applies)
+        $this->postJson('/ai-chatbox/message', ['message' => 'test'])->assertOk();
+    }
 }

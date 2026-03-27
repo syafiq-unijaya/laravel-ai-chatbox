@@ -8,7 +8,9 @@
     $sound       = config('ai-chatbox.sound', true);
     $soundVolume = config('ai-chatbox.sound_volume', 0.4);
     $healthCheck = config('ai-chatbox.health_check', true);
+    $stream      = config('ai-chatbox.stream', true);
     $routeUrl    = route('ai-chatbox.message');
+    $streamUrl   = route('ai-chatbox.stream');
     $clearUrl    = route('ai-chatbox.clear');
     $healthUrl   = route('ai-chatbox.health');
     $userSegment = auth()->check() ? auth()->id() : 'guest';
@@ -27,9 +29,11 @@
 <script>
     window.AiChatboxConfig = {
         url:            "{{ $routeUrl }}",
+        streamUrl:      "{{ $streamUrl }}",
         clearUrl:       "{{ $clearUrl }}",
         healthUrl:      "{{ $healthUrl }}",
         healthCheck:    {{ $healthCheck ? 'true' : 'false' }},
+        stream:         {{ $stream ? 'true' : 'false' }},
         token:          "{{ csrf_token() }}",
         title:          {!! json_encode($title, JSON_HEX_TAG) !!},
         placeholder:    {!! json_encode($placeholder, JSON_HEX_TAG) !!},

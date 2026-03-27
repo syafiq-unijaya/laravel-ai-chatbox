@@ -27,20 +27,27 @@
 
             <div id="ai-chatbox-header">
                 <span>{{ title }}</span>
-                <button id="ai-chatbox-clear" title="Clear conversation" aria-label="Clear conversation" @click="clearConversation">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                    </svg>
-                </button>
+                <div class="ai-chatbox-header-actions">
+                    <button class="ai-chatbox-header-btn" title="New conversation" aria-label="New conversation" @click="newConversation">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                        </svg>
+                    </button>
+                    <button id="ai-chatbox-clear" class="ai-chatbox-header-btn" title="Clear conversation" aria-label="Clear conversation" @click="clearConversation">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div id="ai-chatbox-messages" ref="messagesRef">
                 <template v-for="(msg, i) in messages" :key="i">
-                    <div v-if="msg.role === 'ai' && markdown"
+                    <div v-if="msg.role === 'ai' && markdown && !msg.streaming"
                          class="ai-chatbox-msg ai ai-chatbox-markdown"
                          v-html="renderMarkdown(msg.text)">
                     </div>
-                    <div v-else :class="['ai-chatbox-msg', msg.role]">{{ msg.text }}</div>
+                    <div v-else :class="['ai-chatbox-msg', msg.role, { 'ai-chatbox-streaming': msg.streaming }]">{{ msg.text }}</div>
                 </template>
                 <div v-if="isTyping" class="ai-chatbox-typing">
                     <span></span><span></span><span></span>
@@ -78,6 +85,8 @@ import axios from 'axios'
 // ── Config ──
 const cfg = window.AiChatboxConfig || {}
 const url            = cfg.url
+const streamUrl      = cfg.streamUrl
+const stream         = cfg.stream !== false && !!streamUrl && typeof ReadableStream !== 'undefined'
 const clearUrl       = cfg.clearUrl
 const healthUrl      = cfg.healthUrl
 const title          = cfg.title || 'AI Assistant'
@@ -90,7 +99,27 @@ const healthCheck    = cfg.healthCheck !== false
 const offlineMessage = cfg.offlineMessage || 'AI service is currently unreachable.'
 const position       = cfg.position || 'bottom-right'
 const STORAGE_KEY    = cfg.storageKey || 'ai_chatbox_ui'
+const THREAD_KEY     = STORAGE_KEY + '_tid'
 const storageDriver  = cfg.storageType === 'session' ? sessionStorage : localStorage
+
+// ── Thread ID ──
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0
+        const v = c === 'x' ? r : (r & 0x3 | 0x8)
+        return v.toString(16)
+    })
+}
+
+function loadOrCreateThreadId() {
+    try {
+        const stored = storageDriver.getItem(THREAD_KEY)
+        if (stored) return stored
+    } catch (_) {}
+    const id = generateUUID()
+    try { storageDriver.setItem(THREAD_KEY, id) } catch (_) {}
+    return id
+}
 
 // ── State ──
 const isOpen        = ref(false)
@@ -104,6 +133,7 @@ const toastMessage  = ref('')
 const toastVisible  = ref(false)
 const messagesRef   = ref(null)
 const inputRef      = ref(null)
+const threadId      = ref('')
 
 let toastTimer  = null
 let audioCtx    = null
@@ -229,11 +259,26 @@ async function toggleChat() {
     }
 }
 
-// ── Clear ──
+// ── Clear (current thread) ──
 async function clearConversation() {
     try {
-        await httpPost(clearUrl, {})
+        await httpPost(clearUrl, { thread_id: threadId.value })
     } catch (_) {}
+    messages.value = []
+    try { storageDriver.removeItem(STORAGE_KEY) } catch (_) {}
+    greetingShown.value = false
+    if (greeting) {
+        messages.value.push({ role: 'ai', text: greeting })
+        greetingShown.value = true
+        saveToStorage()
+    }
+}
+
+// ── New conversation (fresh thread) ──
+function newConversation() {
+    const id = generateUUID()
+    threadId.value = id
+    try { storageDriver.setItem(THREAD_KEY, id) } catch (_) {}
     messages.value = []
     try { storageDriver.removeItem(STORAGE_KEY) } catch (_) {}
     greetingShown.value = false
@@ -256,8 +301,91 @@ async function sendMessage() {
     isTyping.value  = true
     scrollToBottom()
 
+    if (stream) {
+        await sendStreaming(text)
+    } else {
+        await sendFallback(text)
+    }
+}
+
+// ── Streaming send (SSE via fetch + ReadableStream) ──
+async function sendStreaming(text) {
+    // Replace typing indicator with an empty streaming bubble
+    isTyping.value = false
+    messages.value.push({ role: 'ai', text: '', streaming: true })
+    const idx = messages.value.length - 1
+
     try {
-        const data = await httpPost(url, { message: text })
+        const headers = Object.assign(
+            { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+            getCsrfHeaders()
+        )
+
+        const response = await fetch(streamUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ message: text, thread_id: threadId.value }),
+        })
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}))
+            messages.value[idx] = { role: 'error', text: errData.error || 'Something went wrong. Please try again.' }
+            return
+        }
+
+        const reader  = response.body.getReader()
+        const decoder = new TextDecoder()
+        let   buffer  = ''
+
+        outer: while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+
+            // Process every complete SSE event (separated by double newline)
+            const parts = buffer.split('\n\n')
+            buffer = parts.pop() // keep the last incomplete chunk
+
+            for (const part of parts) {
+                const dataLine = part.split('\n').find(l => l.startsWith('data: '))
+                if (!dataLine) continue
+
+                const raw = dataLine.slice(6)
+                if (raw === '[DONE]') break outer
+
+                try {
+                    const json = JSON.parse(raw)
+                    if (json.token) {
+                        messages.value[idx].text += json.token
+                        scrollToBottom()
+                    }
+                } catch (_) {}
+            }
+        }
+
+        const finalText = messages.value[idx].text
+        messages.value[idx].streaming = false
+
+        if (finalText) {
+            saveToStorage()
+            ping()
+        } else {
+            messages.value[idx] = { role: 'error', text: 'No response received. Please try again.' }
+        }
+
+    } catch (_) {
+        messages.value[idx] = { role: 'error', text: 'Network error. Please check your connection.' }
+    } finally {
+        isLoading.value = false
+        scrollToBottom()
+    }
+}
+
+// ── Fallback send (standard POST, used when stream: false) ──
+async function sendFallback(text) {
+    try {
+        const data = await httpPost(url, { message: text, thread_id: threadId.value })
         isTyping.value = false
         messages.value.push({ role: 'ai', text: data.reply || 'No response.' })
         saveToStorage()
@@ -285,6 +413,7 @@ onMounted(() => {
     if (cfg.themeColor) {
         document.documentElement.style.setProperty('--chatbox-color', cfg.themeColor)
     }
+    threadId.value = loadOrCreateThreadId()
     loadFromStorage()
     scrollToBottom()
 })
@@ -435,7 +564,9 @@ onMounted(() => {
   justify-content: space-between;
   gap: 10px;
 }
-#ai-chatbox-clear {
+/* Header action buttons */
+.ai-chatbox-header-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.ai-chatbox-header-btn {
   background: transparent;
   border: none;
   color: rgba(255,255,255,0.8);
@@ -445,11 +576,10 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  flex-shrink: 0;
   transition: color .15s, background .15s;
 }
-#ai-chatbox-clear:hover { color: #fff; background: rgba(255,255,255,0.15); }
-#ai-chatbox-clear svg { width: 18px; height: 18px; }
+.ai-chatbox-header-btn:hover { color: #fff; background: rgba(255,255,255,0.15); }
+.ai-chatbox-header-btn svg { width: 18px; height: 18px; }
 
 /* ── Messages area ── */
 #ai-chatbox-messages {
@@ -485,6 +615,17 @@ onMounted(() => {
   color: var(--chatbox-text);
   border-bottom-left-radius: 4px;
   align-self: flex-start;
+}
+
+/* ── Streaming cursor ── */
+.ai-chatbox-streaming::after {
+  content: '▋';
+  animation: chatbox-cursor 1s step-start infinite;
+  margin-left: 1px;
+  opacity: 1;
+}
+@keyframes chatbox-cursor {
+  50% { opacity: 0; }
 }
 
 /* ── Typing indicator ── */
