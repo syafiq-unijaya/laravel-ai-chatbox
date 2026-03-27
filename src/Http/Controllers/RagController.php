@@ -140,6 +140,7 @@ class RagController extends Controller
             $cfg['rag_embedding_url'] ?? null,
             $cfg['rag_embedding_model'] ?? null,
             $cfg['api_token'] ?? null,
+            isset($cfg['rag_embedding_timeout']) ? (int) $cfg['rag_embedding_timeout'] : null,
         );
         $chunkSize = (int) config('ai-chatbox.rag_chunk_size', 500);
         $overlap = (int) config('ai-chatbox.rag_chunk_overlap', 50);

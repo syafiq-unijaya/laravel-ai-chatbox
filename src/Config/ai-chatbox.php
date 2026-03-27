@@ -325,6 +325,7 @@ return [
     'rag_enabled' => env('AI_CHATBOX_RAG', false),
     'rag_embedding_url' => env('AI_CHATBOX_EMBEDDING_URL', 'http://localhost:11434/v1/embeddings'),
     'rag_embedding_model' => env('AI_CHATBOX_EMBEDDING_MODEL', 'nomic-embed-text'),
+    'rag_embedding_timeout' => (int) env('AI_CHATBOX_EMBEDDING_TIMEOUT', 10),
     'rag_top_k' => (int) env('AI_CHATBOX_RAG_TOP_K', 3),
     'rag_chunk_size' => (int) env('AI_CHATBOX_RAG_CHUNK_SIZE', 500),
     'rag_chunk_overlap' => (int) env('AI_CHATBOX_RAG_CHUNK_OVERLAP', 50),
@@ -404,11 +405,11 @@ return [
     'providers' => [
 
         'lmstudio' => [
-            'api_url' => env('LMSTUDIO_URL', 'http://localhost:1234/v1/chat/completions'),
+            'api_url' => env('LMSTUDIO_URL', 'http://127.0.0.1:1234/v1/chat/completions'),
             'api_token' => env('LMSTUDIO_TOKEN', 'lmstudio'),
-            'api_model' => env('LMSTUDIO_MODEL', 'local-model'),
-            'rag_embedding_url' => env('LMSTUDIO_EMBEDDING_URL', 'http://localhost:1234/v1/embeddings'),
-            'rag_embedding_model' => env('LMSTUDIO_EMBEDDING_MODEL', ''),
+            'api_model' => env('LMSTUDIO_MODEL', 'phi-3.5-mini-instruct'),
+            'rag_embedding_url' => env('LMSTUDIO_EMBEDDING_URL', 'http://127.0.0.1:1234/v1/embeddings'),
+            'rag_embedding_model' => env('LMSTUDIO_EMBEDDING_MODEL', 'text-embedding-nomic-embed-text-v1.5'),
         ],
 
         'ollama' => [

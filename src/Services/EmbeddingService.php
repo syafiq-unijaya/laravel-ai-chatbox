@@ -6,14 +6,16 @@ use Illuminate\Support\Facades\Log;
 class EmbeddingService
 {
     /**
-     * @param  string|null  $url    Embedding endpoint. Falls back to ai-chatbox.rag_embedding_url.
-     * @param  string|null  $model  Embedding model name. Falls back to ai-chatbox.rag_embedding_model.
-     * @param  string|null  $token  API token. Falls back to ai-chatbox.api_token.
+     * @param  string|null  $url      Embedding endpoint. Falls back to ai-chatbox.rag_embedding_url.
+     * @param  string|null  $model    Embedding model name. Falls back to ai-chatbox.rag_embedding_model.
+     * @param  string|null  $token    API token. Falls back to ai-chatbox.api_token.
+     * @param  int|null     $timeout  Request timeout in seconds. Falls back to ai-chatbox.rag_embedding_timeout.
      */
     public function __construct(
         private readonly ?string $url = null,
         private readonly ?string $model = null,
         private readonly ?string $token = null,
+        private readonly ?int    $timeout = null,
     ) {}
 
     /**
@@ -27,9 +29,10 @@ class EmbeddingService
      */
     public function embed(string $text): ?array
     {
-        $url = $this->url ?? config('ai-chatbox.rag_embedding_url', '');
-        $model = $this->model ?? config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
-        $token = $this->token ?? config('ai-chatbox.api_token', '');
+        $url     = $this->url     ?? config('ai-chatbox.rag_embedding_url', '');
+        $model   = $this->model   ?? config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
+        $token   = $this->token   ?? config('ai-chatbox.api_token', '');
+        $timeout = $this->timeout ?? (int) config('ai-chatbox.rag_embedding_timeout', 10);
 
         if (empty($url)) {
             Log::warning('AI Chatbox RAG: rag_embedding_url is not configured.');
@@ -37,7 +40,7 @@ class EmbeddingService
         }
 
         try {
-            $client = app('ai-chatbox.guzzle')(['timeout' => 60]);
+            $client = app('ai-chatbox.guzzle')(['timeout' => $timeout]);
 
             $response = $client->post($url, [
                 'headers' => [
