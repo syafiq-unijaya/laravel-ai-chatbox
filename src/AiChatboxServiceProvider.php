@@ -42,6 +42,7 @@ class AiChatboxServiceProvider extends ServiceProvider
         $this->registerRoutes();
         $this->registerPublishing();
         $this->registerBladeDirective();
+        $this->registerLivewireComponent();
     }
 
     protected function registerRoutes(): void
@@ -111,9 +112,21 @@ class AiChatboxServiceProvider extends ServiceProvider
 
     protected function registerBladeDirective(): void
     {
-        // Usage: @aichatbox  — drop anywhere in a Blade layout
+        // @aichatbox — renders the full widget (driver determined by 'frontend' config)
         Blade::directive('aichatbox', function () {
             return "<?php echo view('ai-chatbox::chatbox')->render(); ?>";
         });
+
+        // @aichatboxConfig — outputs only window.AiChatboxConfig; for custom frontends
+        Blade::directive('aichatboxConfig', function () {
+            return "<?php echo view('ai-chatbox::chatbox-config')->render(); ?>";
+        });
+    }
+
+    protected function registerLivewireComponent(): void
+    {
+        if (class_exists(\Livewire\Livewire::class)) {
+            \Livewire\Livewire::component('ai-chatbox', \SyafiqUnijaya\AiChatbox\Livewire\AiChatbox::class);
+        }
     }
 }

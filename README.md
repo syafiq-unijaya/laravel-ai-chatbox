@@ -8,7 +8,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue.js-3-42b883?logo=vue.js&logoColor=white)](https://vuejs.org)
 [![License](https://img.shields.io/packagist/l/syafiq-unijaya/laravel-ai-chatbox.svg)](LICENSE)
 
-A drop-in AI chatbox widget for Laravel — powered by **Vue 3** on the frontend and your choice of AI provider on the backend. One Blade directive, zero build tools required in your application.
+A drop-in AI chatbox widget for Laravel — one Blade directive, zero build tools required in your application. Choose your frontend: **Vue 3** (default), **vanilla JS** (no framework), **Livewire + Alpine.js**, or **API-only** to plug in your own React/Vue/Svelte component.
 
 Messages are proxied through your Laravel backend to any **OpenAI-compatible API**. Defaults to **Ollama** running locally with the `phi3:mini` model. Includes a full **RAG (Retrieval-Augmented Generation)** system with an admin UI for uploading documents the AI can reference.
 
@@ -17,12 +17,12 @@ Messages are proxied through your Laravel backend to any **OpenAI-compatible API
 ## Features
 
 - **One-line integration** — drop `@aichatbox` anywhere in a Blade layout
-- **Vue 3 frontend** — reactive widget with no jQuery or external CDN dependencies
+- **Four frontend drivers** — Vue 3 (default), vanilla JS (no framework), Livewire + Alpine.js, or API-only (`none`) for React/Svelte/custom builds
 - **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, LM Studio, or any OpenAI-compatible endpoint
 - **RAG (Retrieval-Augmented Generation)** — upload `.md`/`.txt` documents; the chatbox retrieves relevant context automatically on every message
 - **Admin Knowledge Base UI** — drag-and-drop document manager at `/ai-chatbox/rag` to upload, index, reprocess, and delete documents
 - **Real-time token streaming** — AI replies stream token-by-token via Server-Sent Events (SSE) with a blinking cursor
-- **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify`, both bundled (no CDN)
+- **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify` (bundled in Vue driver; CDN-loaded in blade/livewire drivers)
 - **Conversation threads** — each conversation gets a unique UUID thread; start a fresh thread any time without losing context of others
 - **Session memory** — server-side history per thread with configurable turn limit; context is automatically sent back to the AI on every message
 - **Token-based context trimming** — history is trimmed oldest-first by estimated token count to keep requests within your model's context window
@@ -45,7 +45,7 @@ Messages are proxied through your Laravel backend to any **OpenAI-compatible API
 | PHP | 8.2+ |
 | Laravel | 10, 11, or 12 |
 
-> No Node.js or npm required in your application — the Vue bundle is pre-compiled and published as a static asset.
+> No Node.js or npm required in your application — the Vue bundle is pre-compiled and published as a static asset. The `blade` and `livewire` drivers require no compiled assets at all.
 
 ---
 
@@ -138,7 +138,7 @@ AI_CHATBOX_LANGUAGE=English
 @aichatbox
 ```
 
-The chatbox appears as a floating button on every page that includes the layout.
+The chatbox appears as a floating button on every page that includes the layout. Use `@aichatboxConfig` instead if you are bringing your own frontend (React, Svelte, etc.) — it outputs only `window.AiChatboxConfig` with no widget HTML.
 
 ---
 
@@ -205,6 +205,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
+| `frontend` | `AI_CHATBOX_FRONTEND` | `vue` | UI driver — `vue`, `blade`, `livewire`, or `none` (see [Frontend Drivers](#frontend-drivers)) |
 | `title` | `AI_CHATBOX_TITLE` | `AI Assistant` | Header title |
 | `placeholder` | — | `Type your message...` | Input placeholder text |
 | `theme_color` | — | `#4f46e5` | Primary colour (CSS variable) |
@@ -255,6 +256,117 @@ POST   /ai-chatbox/rag/{id}/reprocess  RAG admin — re-chunk and re-embed      
 ```
 
 > RAG admin routes require an authenticated user by default (`rag_admin_middleware`). Publish the config to change this.
+
+---
+
+## Frontend Drivers
+
+The `frontend` config key controls which UI `@aichatbox` renders. All drivers share the same backend API routes and the same `window.AiChatboxConfig` object — only the widget layer changes.
+
+```env
+AI_CHATBOX_FRONTEND=vue       # Vue 3 widget (default)
+AI_CHATBOX_FRONTEND=blade     # Vanilla JS widget, no framework
+AI_CHATBOX_FRONTEND=livewire  # Alpine.js widget via Livewire
+AI_CHATBOX_FRONTEND=none      # No widget — API + config only
+```
+
+| Driver | Widget | Streaming | JS dependency | Assets required |
+|---|---|---|---|---|
+| `vue` | Vue 3 SFC | SSE | bundled `chatbox.js` | `php artisan vendor:publish --tag=ai-chatbox-assets` |
+| `blade` | Vanilla JS | SSE | none (marked.js from CDN if markdown on) | same |
+| `livewire` | Alpine.js | SSE | Alpine.js (bundled with Livewire 3) | same |
+| `none` | — | your choice | none | not required |
+
+---
+
+### `vue` — Vue 3 (default)
+
+No extra setup. The pre-compiled Vue bundle mounts to `#ai-chatbox-app` and reads `window.AiChatboxConfig`.
+
+```env
+AI_CHATBOX_FRONTEND=vue
+```
+
+---
+
+### `blade` — Vanilla JS
+
+A self-contained widget with no framework dependency. Uses the same CSS as the Vue driver (identical IDs and class names), so all appearance config options apply equally.
+
+```env
+AI_CHATBOX_FRONTEND=blade
+```
+
+If `AI_CHATBOX_MARKDOWN=true`, `marked.js` and `DOMPurify` are loaded from the jsDelivr CDN. Set `AI_CHATBOX_MARKDOWN=false` to remove the CDN dependency entirely.
+
+---
+
+### `livewire` — Livewire + Alpine.js
+
+Renders an Alpine.js chat widget. Livewire 3 bundles Alpine.js automatically, so no additional scripts are needed.
+
+```env
+AI_CHATBOX_FRONTEND=livewire
+```
+
+The package also registers a Livewire component, so you can mount the widget independently anywhere in your app:
+
+```blade
+<livewire:ai-chatbox />
+```
+
+> The Livewire component renders the same Alpine.js view and requires `window.AiChatboxConfig` to be present on the page. If you use `<livewire:ai-chatbox />` without `@aichatbox`, add `@aichatboxConfig` to your layout to inject the config.
+
+```blade
+{{-- layout --}}
+@aichatboxConfig
+...
+{{-- somewhere else in the page --}}
+<livewire:ai-chatbox />
+```
+
+---
+
+### `none` — API-only / custom frontend
+
+Outputs only `window.AiChatboxConfig`. No widget HTML or scripts are rendered. Use this when you are building your own frontend in React, Svelte, or any other framework.
+
+```env
+AI_CHATBOX_FRONTEND=none
+```
+
+Or use the explicit `@aichatboxConfig` directive — same result, regardless of the `frontend` setting:
+
+```blade
+@aichatboxConfig
+```
+
+**`window.AiChatboxConfig` reference:**
+
+```js
+window.AiChatboxConfig = {
+    url,            // POST /ai-chatbox/message  — full JSON reply
+    streamUrl,      // POST /ai-chatbox/stream   — SSE token stream
+    clearUrl,       // POST /ai-chatbox/clear    — clear session history
+    healthUrl,      // GET  /ai-chatbox/health   — liveness check
+    token,          // CSRF token
+    stream,         // boolean — whether streaming is enabled
+    healthCheck,    // boolean
+    title,          // widget title string
+    placeholder,    // input placeholder
+    greeting,       // opening message
+    markdown,       // boolean
+    sound,          // boolean
+    soundVolume,    // 0.0–1.0
+    position,       // 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left'
+    storageKey,     // localStorage/sessionStorage key (scoped per app + user)
+    storageType,    // 'local' | 'session'
+    offlineMessage, // toast text when health check fails
+    themeColor,     // primary hex colour
+};
+```
+
+All API endpoints accept `{ message, thread_id }` as JSON and return `{ reply }` (POST) or SSE `data: {"token":"..."}` events ending with `data: [DONE]` (stream).
 
 ---
 
@@ -463,7 +575,7 @@ AI_CHATBOX_STREAM=false   # wait for the full reply before displaying
 
 **How it works:**
 
-1. The Vue frontend calls `POST /ai-chatbox/stream` using the Fetch API + `ReadableStream`
+1. The frontend calls `POST /ai-chatbox/stream` using the Fetch API + `ReadableStream`
 2. The server proxies the AI API response using Guzzle's `'stream' => true` option and reads 1024-byte chunks
 3. Each token is emitted as an SSE event: `data: {"token":"Hello"}`
 4. The stream ends with `data: [DONE]`
@@ -669,7 +781,16 @@ AI_CHATBOX_STORAGE=session
 
 ## Markdown Rendering
 
-AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify), both **bundled into the widget's JavaScript asset** — no CDN calls or external scripts required. Supported elements:
+AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify). Availability depends on the frontend driver:
+
+| Driver | Source |
+|---|---|
+| `vue` | Bundled into `chatbox.js` — no CDN calls |
+| `blade` | Loaded from jsDelivr CDN at runtime |
+| `livewire` | Loaded from jsDelivr CDN at runtime |
+| `none` | Your responsibility |
+
+Supported elements:
 
 - Bold, italic, strikethrough
 - Bullet and numbered lists
@@ -711,32 +832,62 @@ AI_CHATBOX_COLOR_SCHEME=dark    # force dark
 
 ## Customising the Widget
 
-**Publish views** to override the Blade template:
+**Publish views** to override any Blade template:
 
 ```bash
 php artisan vendor:publish --tag=ai-chatbox-views
 ```
 
-Published to `resources/views/vendor/ai-chatbox/chatbox.blade.php`.
+Published to `resources/views/vendor/ai-chatbox/`. The relevant files per driver:
+
+| File | Driver | Purpose |
+|---|---|---|
+| `chatbox.blade.php` | all | Main dispatcher — routes to the active driver |
+| `chatbox-config.blade.php` | all | Outputs `window.AiChatboxConfig` (shared by all drivers) |
+| `chatbox-vue.blade.php` | `vue` | CSS link + Vue mount point + JS bundle |
+| `chatbox-blade.blade.php` | `blade` | Full vanilla JS widget |
+| `livewire/chatbox.blade.php` | `livewire` | Alpine.js widget |
 
 ---
 
 ## Frontend Architecture
 
-The widget frontend is built with **Vue 3** (Composition API) and compiled to a self-contained IIFE bundle using **Vite**. The bundle includes Vue, `axios`, `marked`, and `DOMPurify` — your Laravel application requires no Node.js tooling.
+The package ships four frontend implementations that share the same backend API and CSS:
 
 ```
-src/resources/js/
-├── app.js                   # Entry point — mounts Vue to #ai-chatbox-app
-└── components/
-    └── AiChatbox.vue        # Single-file component (template + logic + styles)
+src/resources/
+├── views/
+│   ├── chatbox.blade.php          # Dispatcher — routes to active driver
+│   ├── chatbox-config.blade.php   # window.AiChatboxConfig (shared)
+│   ├── chatbox-vue.blade.php      # Vue 3 driver
+│   ├── chatbox-blade.blade.php    # Vanilla JS driver
+│   └── livewire/
+│       └── chatbox.blade.php      # Livewire + Alpine.js driver
+├── js/
+│   ├── app.js                     # Vite entry — mounts Vue to #ai-chatbox-app
+│   └── components/
+│       └── AiChatbox.vue          # Vue SFC (template + logic + scoped CSS)
+└── assets/
+    ├── css/chatbox.css            # Compiled — shared by all drivers
+    └── js/chatbox.js              # Compiled Vue bundle (vue driver only)
 ```
 
-To rebuild the frontend assets (package contributors only):
+The compiled assets (`chatbox.css` + `chatbox.js`) are pre-built and committed to the repository — your Laravel application requires no Node.js tooling at runtime.
+
+The `blade` and `livewire` drivers use `chatbox.css` for styling (same HTML class names as the Vue widget) and inline JavaScript. No additional compilation is required.
+
+**Rebuilding the Vue bundle** (package contributors only):
 
 ```bash
 npm install
 npm run build   # outputs to src/resources/assets/
+```
+
+The Livewire component is auto-registered by the service provider when `livewire/livewire` is installed:
+
+```php
+// Registered automatically:
+\Livewire\Livewire::component('ai-chatbox', \SyafiqUnijaya\AiChatbox\Livewire\AiChatbox::class);
 ```
 
 ---

@@ -144,6 +144,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend Driver
+    |--------------------------------------------------------------------------
+    | Controls which UI the @aichatbox directive renders.
+    |
+    | 'vue'      — Pre-built Vue 3 widget (default, zero-config)
+    | 'blade'    — Vanilla JS widget, no framework required
+    | 'livewire' — Alpine.js widget mounted via Livewire (requires livewire/livewire)
+    | 'none'     — Only outputs window.AiChatboxConfig; bring your own frontend
+    */
+
+    'frontend' => env('AI_CHATBOX_FRONTEND', 'vue'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Markdown Rendering
     |--------------------------------------------------------------------------
     | When enabled, AI replies are rendered as Markdown (bold, italics, lists,
