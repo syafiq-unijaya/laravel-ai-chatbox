@@ -127,6 +127,53 @@ class AdminDiagnosticsTest extends TestCase
             ->assertDontSee('no such provider is defined');
     }
 
+    // ── Embedding URL diagnostic (always-on, independent of rag_enabled) ─────
+
+    public function test_embedding_url_error_shown_even_when_rag_disabled(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_enabled', false);
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', '');
+
+        $this->get('/ai-chatbox/admin')
+            ->assertOk()
+            ->assertSee('rag_embedding_url is not set');
+    }
+
+    public function test_embedding_model_error_shown_even_when_rag_disabled(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_enabled', false);
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.rag_embedding_model', '');
+
+        $this->get('/ai-chatbox/admin')
+            ->assertOk()
+            ->assertSee('rag_embedding_model is not set');
+    }
+
+    public function test_no_embedding_error_when_url_and_model_are_set(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_enabled', false);
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
+
+        $this->get('/ai-chatbox/admin')
+            ->assertOk()
+            ->assertDontSee('rag_embedding_url is not set')
+            ->assertDontSee('rag_embedding_model is not set');
+    }
+
+    public function test_ssrf_warning_shown_for_local_embedding_url_when_ssrf_enabled(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_enabled', false);
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://127.0.0.1:1234/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.rag_embedding_model', 'my-model');
+        $this->app['config']->set('ai-chatbox.ssrf_protection', true);
+
+        $this->get('/ai-chatbox/admin')
+            ->assertOk()
+            ->assertSee('ssrf_protection is enabled');
+    }
+
     // ── All-pass green banner ─────────────────────────────────────────────────
 
     public function test_all_pass_banner_shown_when_no_issues(): void
@@ -145,6 +192,8 @@ class AdminDiagnosticsTest extends TestCase
         $this->app['config']->set('ai-chatbox.temperature', 0.7);
         $this->app['config']->set('ai-chatbox.timeout', 30);
         $this->app['config']->set('ai-chatbox.rag_enabled', false);
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
         $this->app['config']->set('ai-chatbox.memory_driver', 'session');
         $this->app['config']->set('ai-chatbox.storage', 'local');
         $this->app['config']->set('ai-chatbox.rag_admin_middleware', ['web', 'auth', 'role:admin']);

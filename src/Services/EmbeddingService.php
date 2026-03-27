@@ -6,6 +6,17 @@ use Illuminate\Support\Facades\Log;
 class EmbeddingService
 {
     /**
+     * @param  string|null  $url    Embedding endpoint. Falls back to ai-chatbox.rag_embedding_url.
+     * @param  string|null  $model  Embedding model name. Falls back to ai-chatbox.rag_embedding_model.
+     * @param  string|null  $token  API token. Falls back to ai-chatbox.api_token.
+     */
+    public function __construct(
+        private readonly ?string $url = null,
+        private readonly ?string $model = null,
+        private readonly ?string $token = null,
+    ) {}
+
+    /**
      * Generate an embedding vector for the given text.
      *
      * Tries the OpenAI-compatible format first (used by OpenAI, LM Studio,
@@ -16,9 +27,9 @@ class EmbeddingService
      */
     public function embed(string $text): ?array
     {
-        $url = config('ai-chatbox.rag_embedding_url', '');
-        $model = config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
-        $token = config('ai-chatbox.api_token', '');
+        $url = $this->url ?? config('ai-chatbox.rag_embedding_url', '');
+        $model = $this->model ?? config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
+        $token = $this->token ?? config('ai-chatbox.api_token', '');
 
         if (empty($url)) {
             Log::warning('AI Chatbox RAG: rag_embedding_url is not configured.');

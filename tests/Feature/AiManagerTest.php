@@ -127,6 +127,46 @@ class AiManagerTest extends TestCase
         $this->assertSame(0.42,                      $config['temperature']); // inherited
     }
 
+    // ── resolveConfig — per-provider RAG embedding ────────────────────────────
+
+    public function test_resolve_config_named_provider_overrides_rag_embedding_url(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://global.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'lmstudio' => [
+                'api_url'             => 'http://lmstudio.example.com/v1/chat/completions',
+                'api_token'           => 'lm-token',
+                'api_model'           => 'lm-model',
+                'rag_embedding_url'   => 'http://lmstudio.example.com/v1/embeddings',
+                'rag_embedding_model' => 'lm-embed-model',
+            ],
+        ]);
+
+        $config = $this->app->make(AiManager::class)->resolveConfig('lmstudio');
+
+        $this->assertSame('http://lmstudio.example.com/v1/embeddings', $config['rag_embedding_url']);
+        $this->assertSame('lm-embed-model', $config['rag_embedding_model']);
+    }
+
+    public function test_resolve_config_named_provider_inherits_global_rag_embedding_url_when_absent(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://global.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.rag_embedding_model', 'global-embed');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'myprovider' => [
+                'api_url'   => 'http://myprovider.example.com/v1/chat',
+                'api_token' => 'my-token',
+                'api_model' => 'my-model',
+                // no rag_embedding_url or rag_embedding_model
+            ],
+        ]);
+
+        $config = $this->app->make(AiManager::class)->resolveConfig('myprovider');
+
+        $this->assertSame('http://global.example.com/v1/embeddings', $config['rag_embedding_url']);
+        $this->assertSame('global-embed', $config['rag_embedding_model']);
+    }
+
     // ── __call delegation ─────────────────────────────────────────────────────
 
     public function test_manager_is_singleton(): void

@@ -5,6 +5,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\View\View;
+use SyafiqUnijaya\AiChatbox\AiManager;
 use SyafiqUnijaya\AiChatbox\Models\RagChunk;
 use SyafiqUnijaya\AiChatbox\Models\RagDocument;
 use SyafiqUnijaya\AiChatbox\Services\DocumentChunker;
@@ -12,19 +13,26 @@ use SyafiqUnijaya\AiChatbox\Services\EmbeddingService;
 
 class RagController extends Controller
 {
+    public function __construct(private readonly AiManager $aiManager) {}
+
     // ── List ─────────────────────────────────────────────────────────────────
 
     public function index(): View
     {
         $documents = RagDocument::withCount('chunks')->latest()->get();
+        $cfg = $this->effectiveConfig();
+
+        $embeddingUrl   = $cfg['rag_embedding_url'] ?? '';
+        $embeddingModel = $cfg['rag_embedding_model'] ?? '';
 
         return view('ai-chatbox::rag', [
-            'documents' => $documents,
-            'ragEnabled' => (bool) config('ai-chatbox.rag_enabled'),
-            'embeddingUrl' => config('ai-chatbox.rag_embedding_url'),
-            'embeddingModel' => config('ai-chatbox.rag_embedding_model'),
-            'themeColor' => config('ai-chatbox.theme_color', '#4f46e5'),
-            'colorScheme' => config('ai-chatbox.color_scheme', 'auto'),
+            'documents'           => $documents,
+            'ragEnabled'          => (bool) ($cfg['rag_enabled'] ?? false),
+            'embeddingUrl'        => $embeddingUrl,
+            'embeddingModel'      => $embeddingModel,
+            'embeddingConfigured' => !empty($embeddingUrl) && !empty($embeddingModel),
+            'themeColor'          => config('ai-chatbox.theme_color', '#4f46e5'),
+            'colorScheme'         => config('ai-chatbox.color_scheme', 'auto'),
         ]);
     }
 
@@ -109,14 +117,30 @@ class RagController extends Controller
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    private function effectiveConfig(): array
+    {
+        $active = config('ai-chatbox.active_provider', 'default');
+
+        if (empty($active) || $active === 'default') {
+            return config('ai-chatbox');
+        }
+
+        return $this->aiManager->resolveConfig($active);
+    }
+
     private function processDocument(RagDocument $document, string $content): void
     {
         // Embedding N chunks via HTTP can take well over 30 s on local models.
         // Lift PHP's execution time limit for this admin-only operation.
         set_time_limit((int) config('ai-chatbox.rag_processing_timeout', 0));
 
+        $cfg = $this->effectiveConfig();
         $chunker = new DocumentChunker();
-        $embedSvc = new EmbeddingService();
+        $embedSvc = new EmbeddingService(
+            $cfg['rag_embedding_url'] ?? null,
+            $cfg['rag_embedding_model'] ?? null,
+            $cfg['api_token'] ?? null,
+        );
         $chunkSize = (int) config('ai-chatbox.rag_chunk_size', 500);
         $overlap = (int) config('ai-chatbox.rag_chunk_overlap', 50);
 
@@ -136,8 +160,8 @@ class RagController extends Controller
                 \Illuminate\Support\Facades\Log::warning('AI Chatbox RAG: Chunk embedding failed — chunk will be stored without a vector and skipped during retrieval.', [
                     'document_id' => $document->id,
                     'chunk_index' => $i,
-                    'embedding_url' => config('ai-chatbox.rag_embedding_url'),
-                    'embedding_model' => config('ai-chatbox.rag_embedding_model'),
+                    'embedding_url' => $cfg['rag_embedding_url'] ?? '',
+                    'embedding_model' => $cfg['rag_embedding_model'] ?? '',
                 ]);
             }
 
@@ -155,14 +179,14 @@ class RagController extends Controller
             $document->update([
                 'status' => 'failed',
                 'chunk_count' => $count,
-                'error_message' => "Embedding failed for all {$count} chunks. Check AI_CHATBOX_EMBEDDING_URL ("
-                . config('ai-chatbox.rag_embedding_url') . ') and AI_CHATBOX_EMBEDDING_MODEL ('
-                . config('ai-chatbox.rag_embedding_model') . ').',
+                'error_message' => "Embedding failed for all {$count} chunks. Check embedding URL ("
+                . ($cfg['rag_embedding_url'] ?? '') . ') and embedding model ('
+                . ($cfg['rag_embedding_model'] ?? '') . ').',
             ]);
             \Illuminate\Support\Facades\Log::error('AI Chatbox RAG: All chunk embeddings failed — document marked as failed.', [
                 'document_id' => $document->id,
                 'title' => $document->title,
-                'embedding_url' => config('ai-chatbox.rag_embedding_url'),
+                'embedding_url' => $cfg['rag_embedding_url'] ?? '',
             ]);
             return;
         }

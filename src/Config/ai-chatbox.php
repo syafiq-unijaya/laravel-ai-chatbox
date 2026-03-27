@@ -305,12 +305,14 @@ return [
     |
     | 'rag_enabled'              — master switch (default: false)
     | 'rag_embedding_url'        — endpoint for generating text embeddings.
-    |                              Ollama:  http://localhost:11434/v1/embeddings
-    |                              OpenAI:  https://api.openai.com/v1/embeddings
-    |                              LM Studio: http://localhost:1234/v1/embeddings
+    |                              Global fallback: AI_CHATBOX_EMBEDDING_URL
+    |                              Per-provider:    LMSTUDIO_EMBEDDING_URL, OLLAMA_EMBEDDING_URL,
+    |                                               OPENAI_EMBEDDING_URL, GROQ_EMBEDDING_URL
     | 'rag_embedding_model'      — embedding model name.
-    |                              Ollama: nomic-embed-text, mxbai-embed-large
-    |                              OpenAI: text-embedding-3-small
+    |                              Global fallback: AI_CHATBOX_EMBEDDING_MODEL
+    |                              Per-provider:    LMSTUDIO_EMBEDDING_MODEL, OLLAMA_EMBEDDING_MODEL,
+    |                                               OPENAI_EMBEDDING_MODEL, GROQ_EMBEDDING_MODEL
+    |                              Defaults: Ollama=nomic-embed-text, OpenAI=text-embedding-3-small
     | 'rag_top_k'                — number of chunks to retrieve per query (default: 3)
     | 'rag_chunk_size'           — target chunk size in tokens (~4 chars/token, default: 500)
     | 'rag_chunk_overlap'        — overlap between chunks in tokens (default: 50)
@@ -405,24 +407,32 @@ return [
             'api_url' => env('LMSTUDIO_URL', 'http://localhost:1234/v1/chat/completions'),
             'api_token' => env('LMSTUDIO_TOKEN', 'lmstudio'),
             'api_model' => env('LMSTUDIO_MODEL', 'local-model'),
+            'rag_embedding_url' => env('LMSTUDIO_EMBEDDING_URL', 'http://localhost:1234/v1/embeddings'),
+            'rag_embedding_model' => env('LMSTUDIO_EMBEDDING_MODEL', ''),
         ],
 
         'ollama' => [
             'api_url' => env('OLLAMA_URL', 'http://localhost:11434/v1/chat/completions'),
             'api_token' => env('OLLAMA_TOKEN', 'your-ollama-token'),
             'api_model' => env('OLLAMA_MODEL', 'gpt-oss:120b'),
+            'rag_embedding_url' => env('OLLAMA_EMBEDDING_URL', 'http://localhost:11434/v1/embeddings'),
+            'rag_embedding_model' => env('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text'),
         ],
 
         'openai' => [
             'api_url' => env('OPENAI_URL', ''),
             'api_token' => env('OPENAI_API_KEY', ''),
             'api_model' => env('OPENAI_MODEL', ''),
+            'rag_embedding_url' => env('OPENAI_EMBEDDING_URL', ''),
+            'rag_embedding_model' => env('OPENAI_EMBEDDING_MODEL', ''),
         ],
 
         'groq' => [
             'api_url' => env('GROQ_URL', ''),
             'api_token' => env('GROQ_API_KEY', ''),
             'api_model' => env('GROQ_MODEL', ''),
+            'rag_embedding_url' => env('GROQ_EMBEDDING_URL', ''),
+            'rag_embedding_model' => env('GROQ_EMBEDDING_MODEL', ''),
         ],
     ],
 

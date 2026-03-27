@@ -289,6 +289,8 @@
                                 <span class="line-clamp-2 text-gray-600 dark:text-gray-400">{{ $val }}</span>
                             @elseif($key === 'active_provider')
                                 <span class="badge badge-green">{{ $val ?: 'default' }}</span>
+                            @elseif($key === 'rag_embedding_url')
+                                <span class="break-all">{{ $val ?: '—' }}</span>
                             @else
                                 {{ $val }}
                             @endif

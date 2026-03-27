@@ -190,6 +190,57 @@ class RagDocumentTest extends TestCase
         $this->assertSame($originalCount, $doc->chunk_count);
     }
 
+    // ── Per-provider embedding routing ────────────────────────────────────────
+
+    public function test_rag_index_shows_active_provider_embedding_url(): void
+    {
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', 'http://global.example.com/v1/embeddings');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'lmstudio' => [
+                'api_url'             => 'http://lmstudio.example.com/v1/chat',
+                'api_token'           => 'lm-token',
+                'api_model'           => 'lm-model',
+                'rag_embedding_url'   => 'http://lmstudio.example.com/v1/embeddings',
+                'rag_embedding_model' => 'my-embed-model',
+            ],
+        ]);
+        $this->app['config']->set('ai-chatbox.active_provider', 'lmstudio');
+
+        $this->withoutMiddleware()
+             ->get('/ai-chatbox/rag')
+             ->assertOk()
+             ->assertSee('http://lmstudio.example.com/v1/embeddings')
+             ->assertSee('my-embed-model')
+             ->assertDontSee('http://global.example.com/v1/embeddings');
+    }
+
+    public function test_rag_upload_uses_active_provider_embedding_config(): void
+    {
+        // Global embedding URL is empty — would fail if RagController ignores active_provider
+        $this->app['config']->set('ai-chatbox.rag_embedding_url', '');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'lmstudio' => [
+                'api_url'             => 'http://lmstudio.example.com/v1/chat',
+                'api_token'           => 'lm-token',
+                'api_model'           => 'lm-model',
+                'rag_embedding_url'   => 'http://lmstudio.example.com/v1/embeddings',
+                'rag_embedding_model' => 'lm-embed',
+            ],
+        ]);
+        $this->app['config']->set('ai-chatbox.active_provider', 'lmstudio');
+
+        $this->mockGuzzle([$this->mockEmbedding()]);
+
+        $this->withoutMiddleware()
+             ->post('/ai-chatbox/rag', [
+                 'file' => $this->fakeFile('Hello from LM Studio.', 'txt'),
+             ])
+             ->assertRedirect('/ai-chatbox/rag')
+             ->assertSessionHas('success');
+
+        $this->assertSame('ready', RagDocument::first()->status);
+    }
+
     // ── RAG context injection ─────────────────────────────────────────────────
 
     public function test_rag_context_is_injected_into_chat_when_enabled(): void

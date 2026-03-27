@@ -49,11 +49,13 @@ class AdminController extends Controller
 
         $configGroups = [
             'AI API' => [
-                'active_provider' => $cfg['active_provider'] ?? 'default',
-                'api_url' => $cfg['api_url'] ?? null,
-                'api_token' => $cfg['api_token'] ?? null,
-                'api_model' => $cfg['api_model'] ?? null,
-                'timeout' => $cfg['timeout'] ?? null,
+                'active_provider'     => $cfg['active_provider'] ?? 'default',
+                'api_url'             => $cfg['api_url'] ?? null,
+                'api_token'           => $cfg['api_token'] ?? null,
+                'api_model'           => $cfg['api_model'] ?? null,
+                'timeout'             => $cfg['timeout'] ?? null,
+                'rag_embedding_url'   => $cfg['rag_embedding_url'] ?? null,
+                'rag_embedding_model' => $cfg['rag_embedding_model'] ?? null,
             ],
             'Response' => [
                 'language' => $cfg['language'] ?? null,
@@ -252,24 +254,26 @@ class AdminController extends Controller
             $diagnostics[] = ['level' => 'error', 'group' => 'Frontend', 'message' => 'frontend is set to "livewire" but the livewire/livewire package is not installed. Run: composer require livewire/livewire'];
         }
 
-        // — RAG —
+        // — RAG embedding config (always checked — required for upload/reprocess even when chat RAG is off) —
+        $embeddingUrl = $cfg['rag_embedding_url'] ?? '';
+        if (empty($embeddingUrl)) {
+            $diagnostics[] = ['level' => 'error', 'group' => 'RAG', 'message' => 'rag_embedding_url is not set. Document upload and reprocessing will fail. Set AI_CHATBOX_EMBEDDING_URL (or the provider-specific variant, e.g. LMSTUDIO_EMBEDDING_URL).'];
+        } else {
+            $embHost = parse_url($embeddingUrl, PHP_URL_HOST);
+            $isLocal = in_array($embHost, ['localhost', '127.0.0.1', '::1'])
+            || str_starts_with($embHost ?? '', '192.168.')
+            || str_starts_with($embHost ?? '', '10.')
+            || str_starts_with($embHost ?? '', '172.');
+            if ($isLocal && ($cfg['ssrf_protection'] ?? true)) {
+                $diagnostics[] = ['level' => 'warning', 'group' => 'RAG', 'message' => "rag_embedding_url points to a local address ({$embHost}) but ssrf_protection is enabled — embedding requests will be blocked. Set AI_CHATBOX_SSRF_PROTECTION=false for local embedding services."];
+            }
+        }
+        if (empty($cfg['rag_embedding_model'])) {
+            $diagnostics[] = ['level' => 'error', 'group' => 'RAG', 'message' => 'rag_embedding_model is not set. Document upload and reprocessing will fail. Set AI_CHATBOX_EMBEDDING_MODEL (or the provider-specific variant, e.g. LMSTUDIO_EMBEDDING_MODEL).'];
+        }
+
+        // — RAG chat retrieval (only relevant when rag_enabled = true) —
         if ($ragEnabled) {
-            $embeddingUrl = $cfg['rag_embedding_url'] ?? '';
-            if (empty($embeddingUrl)) {
-                $diagnostics[] = ['level' => 'error', 'group' => 'RAG', 'message' => 'rag_embedding_url (AI_CHATBOX_EMBEDDING_URL) is not set. Document embeddings cannot be generated and RAG retrieval will not work.'];
-            } else {
-                $embHost = parse_url($embeddingUrl, PHP_URL_HOST);
-                $isLocal = in_array($embHost, ['localhost', '127.0.0.1', '::1'])
-                || str_starts_with($embHost ?? '', '192.168.')
-                || str_starts_with($embHost ?? '', '10.')
-                || str_starts_with($embHost ?? '', '172.');
-                if ($isLocal && ($cfg['ssrf_protection'] ?? true)) {
-                    $diagnostics[] = ['level' => 'warning', 'group' => 'RAG', 'message' => "rag_embedding_url points to a local address ({$embHost}) but ssrf_protection is enabled — embedding requests may be blocked. Set AI_CHATBOX_SSRF_PROTECTION=false for local embedding services."];
-                }
-            }
-            if (empty($cfg['rag_embedding_model'])) {
-                $diagnostics[] = ['level' => 'error', 'group' => 'RAG', 'message' => 'rag_embedding_model (AI_CHATBOX_EMBEDDING_MODEL) is not set. No embedding model will be used.'];
-            }
             if (!Schema::hasTable('ai_chatbox_rag_documents')) {
                 $diagnostics[] = ['level' => 'error', 'group' => 'RAG', 'message' => 'Table ai_chatbox_rag_documents is missing. Run: php artisan migrate'];
             }
