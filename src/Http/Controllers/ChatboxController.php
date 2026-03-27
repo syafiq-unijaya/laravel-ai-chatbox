@@ -9,6 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
+use SyafiqUnijaya\AiChatbox\Services\EmbeddingService;
+use SyafiqUnijaya\AiChatbox\Services\RagRetriever;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatboxController extends Controller
@@ -42,15 +44,15 @@ class ChatboxController extends Controller
     public function sendMessage(Request $request): JsonResponse
     {
         $request->validate([
-            'message'   => ['required', 'string', 'max:2000'],
+            'message' => ['required', 'string', 'max:2000'],
             'thread_id' => ['nullable', 'string', 'max:36'],
         ]);
 
         $cfg = config('ai-chatbox');
 
-        $apiUrl   = $cfg['api_url']   ?? '';
+        $apiUrl = $cfg['api_url'] ?? '';
         $apiToken = $cfg['api_token'] ?? '';
-        $model    = $cfg['api_model'] ?? '';
+        $model = $cfg['api_model'] ?? '';
 
         if (empty($apiUrl)) {
             return $this->errorResponse(self::E01, 'AI API URL is not configured.', 500);
@@ -64,16 +66,16 @@ class ChatboxController extends Controller
             return $this->errorResponse(self::E04, 'Invalid model name configured.', 500);
         }
 
-        $timeout           = $cfg['timeout']            ?? 30;
-        $language          = $cfg['language']           ?? 'English';
-        $system            = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
-        $useHistory        = $cfg['history_enabled']    ?? true;
-        $historyLimit      = (int) ($cfg['history_limit']       ?? 50);
+        $timeout = $cfg['timeout'] ?? 30;
+        $language = $cfg['language'] ?? 'English';
+        $system = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
+        $useHistory = $cfg['history_enabled'] ?? true;
+        $historyLimit = (int) ($cfg['history_limit'] ?? 50);
         $contextTokenLimit = (int) ($cfg['context_token_limit'] ?? 4000);
-        $maxTokens         = $cfg['max_tokens']         ?? null;
-        $temperature       = (float) ($cfg['temperature'] ?? 0.7);
+        $maxTokens = $cfg['max_tokens'] ?? null;
+        $temperature = (float) ($cfg['temperature'] ?? 0.7);
 
-        $sessionKey  = $this->sessionKey($request->input('thread_id', ''));
+        $sessionKey = $this->sessionKey($request->input('thread_id', ''));
         $userMessage = $request->input('message');
 
         $systemMessages = [];
@@ -92,8 +94,8 @@ class ChatboxController extends Controller
         // Trim history by approximate token count (4 chars ≈ 1 token)
         if ($contextTokenLimit > 0) {
             $apiMessage = (!empty($system) && !empty($language))
-                ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
-                : $userMessage;
+            ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+            : $userMessage;
 
             while (count($history) >= 2) {
                 $all = array_merge($systemMessages, $history, [['role' => 'user', 'content' => $apiMessage]]);
@@ -107,10 +109,11 @@ class ChatboxController extends Controller
         // Append language reminder only to the outgoing API payload, not to the
         // stored version, so history doesn't accumulate the suffix on every entry.
         $apiMessage = (!empty($system) && !empty($language))
-            ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
-            : $userMessage;
+        ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+        : $userMessage;
 
-        $messages   = array_merge($systemMessages, $history);
+        $ragMessages = $this->ragContext($userMessage);
+        $messages = array_merge($ragMessages, $systemMessages, $history);
         $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
@@ -142,7 +145,7 @@ class ChatboxController extends Controller
             }
 
             if ($useHistory) {
-                $history[] = ['role' => 'user',      'content' => $userMessage];
+                $history[] = ['role' => 'user', 'content' => $userMessage];
                 $history[] = ['role' => 'assistant', 'content' => trim($reply)];
 
                 $maxEntries = $historyLimit * 2;
@@ -176,18 +179,18 @@ class ChatboxController extends Controller
         }
     }
 
-    public function streamMessage(Request $request): StreamedResponse|JsonResponse
+    public function streamMessage(Request $request): StreamedResponse | JsonResponse
     {
         $request->validate([
-            'message'   => ['required', 'string', 'max:2000'],
+            'message' => ['required', 'string', 'max:2000'],
             'thread_id' => ['nullable', 'string', 'max:36'],
         ]);
 
         $cfg = config('ai-chatbox');
 
-        $apiUrl   = $cfg['api_url']   ?? '';
+        $apiUrl = $cfg['api_url'] ?? '';
         $apiToken = $cfg['api_token'] ?? '';
-        $model    = $cfg['api_model'] ?? '';
+        $model = $cfg['api_model'] ?? '';
 
         if (empty($apiUrl)) {
             return $this->errorResponse(self::E01, 'AI API URL is not configured.', 500);
@@ -199,15 +202,15 @@ class ChatboxController extends Controller
             return $this->errorResponse(self::E04, 'Invalid model name configured.', 500);
         }
 
-        $timeout           = $cfg['timeout']            ?? 30;
-        $language          = $cfg['language']           ?? 'English';
-        $system            = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
-        $useHistory        = $cfg['history_enabled']    ?? true;
-        $historyLimit      = (int) ($cfg['history_limit']       ?? 50);
+        $timeout = $cfg['timeout'] ?? 30;
+        $language = $cfg['language'] ?? 'English';
+        $system = str_replace('{language}', $language, $cfg['system_prompt'] ?? '');
+        $useHistory = $cfg['history_enabled'] ?? true;
+        $historyLimit = (int) ($cfg['history_limit'] ?? 50);
         $contextTokenLimit = (int) ($cfg['context_token_limit'] ?? 4000);
-        $temperature       = (float) ($cfg['temperature'] ?? 0.7);
+        $temperature = (float) ($cfg['temperature'] ?? 0.7);
 
-        $sessionKey  = $this->sessionKey($request->input('thread_id', ''));
+        $sessionKey = $this->sessionKey($request->input('thread_id', ''));
         $userMessage = $request->input('message');
 
         $systemMessages = [];
@@ -223,8 +226,8 @@ class ChatboxController extends Controller
         }
 
         $apiMessage = (!empty($system) && !empty($language))
-            ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
-            : $userMessage;
+        ? $userMessage . "\n\n[Important: Reply in {$language} only.]"
+        : $userMessage;
 
         if ($contextTokenLimit > 0) {
             while (count($history) >= 2) {
@@ -236,7 +239,8 @@ class ChatboxController extends Controller
             }
         }
 
-        $messages   = array_merge($systemMessages, $history);
+        $ragMessages = $this->ragContext($userMessage);
+        $messages = array_merge($ragMessages, $systemMessages, $history);
         $messages[] = ['role' => 'user', 'content' => $apiMessage];
 
         try {
@@ -245,14 +249,14 @@ class ChatboxController extends Controller
             $response = $client->post($apiUrl, [
                 'headers' => [
                     'Authorization' => 'Bearer ' . $apiToken,
-                    'Content-Type'  => 'application/json',
-                    'Accept'        => 'application/json',
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
                 ],
                 'json' => array_filter([
-                    'model'       => $model,
-                    'messages'    => $messages,
+                    'model' => $model,
+                    'messages' => $messages,
                     'temperature' => $temperature,
-                    'stream'      => true,
+                    'stream' => true,
                 ], fn($v) => $v !== null),
                 'stream' => true,
             ]);
@@ -262,14 +266,14 @@ class ChatboxController extends Controller
             return response()->stream(
                 function () use ($body, $request, $sessionKey, $useHistory, $historyLimit, $userMessage, $history) {
                     $fullReply = '';
-                    $buffer    = '';
+                    $buffer = '';
 
                     while (!$body->eof()) {
                         $buffer .= $body->read(1024);
 
                         // Process every complete line in the buffer
                         while (($nl = strpos($buffer, "\n")) !== false) {
-                            $line   = rtrim(substr($buffer, 0, $nl), "\r");
+                            $line = rtrim(substr($buffer, 0, $nl), "\r");
                             $buffer = substr($buffer, $nl + 1);
 
                             if ($line === '' || str_starts_with($line, ':')) {
@@ -282,8 +286,8 @@ class ChatboxController extends Controller
 
                             // Strip SSE prefix (OpenAI-compatible) or parse raw JSON (Ollama native)
                             $jsonStr = str_starts_with($line, 'data: ')
-                                ? substr($line, 6)
-                                : $line;
+                            ? substr($line, 6)
+                            : $line;
 
                             $data = json_decode($jsonStr, true);
                             if (!is_array($data)) {
@@ -292,15 +296,16 @@ class ChatboxController extends Controller
 
                             // OpenAI-compatible: choices[0].delta.content
                             // Ollama native:     message.content
-                            $token = $data['choices'][0]['delta']['content']
-                                  ?? $data['message']['content']
-                                  ?? null;
+                            $token = $data['choices'][0]['delta']['content'] ?? $data['message']['content'] ?? null;
 
                             if ($token !== null && $token !== '') {
                                 $fullReply .= $token;
 
                                 echo 'data: ' . json_encode(['token' => $token]) . "\n\n";
-                                if (ob_get_level() > 0) ob_flush();
+                                if (ob_get_level() > 0) {
+                                    ob_flush();
+                                }
+
                                 flush();
                             }
 
@@ -313,7 +318,7 @@ class ChatboxController extends Controller
 
                     // Persist completed reply to server-side session
                     if ($useHistory && $fullReply !== '') {
-                        $history[] = ['role' => 'user',      'content' => $userMessage];
+                        $history[] = ['role' => 'user', 'content' => $userMessage];
                         $history[] = ['role' => 'assistant', 'content' => trim($fullReply)];
 
                         $maxEntries = $historyLimit * 2;
@@ -326,15 +331,18 @@ class ChatboxController extends Controller
                     }
 
                     echo "data: [DONE]\n\n";
-                    if (ob_get_level() > 0) ob_flush();
+                    if (ob_get_level() > 0) {
+                        ob_flush();
+                    }
+
                     flush();
                 },
                 200,
                 [
-                    'Content-Type'      => 'text/event-stream',
-                    'Cache-Control'     => 'no-cache',
-                    'X-Accel-Buffering' => 'no',   // disable Nginx buffering
-                    'Connection'        => 'keep-alive',
+                    'Content-Type' => 'text/event-stream',
+                    'Cache-Control' => 'no-cache',
+                    'X-Accel-Buffering' => 'no', // disable Nginx buffering
+                    'Connection' => 'keep-alive',
                 ]
             );
 
@@ -554,5 +562,37 @@ class ChatboxController extends Controller
         $chars = array_sum(array_map(fn($m) => strlen($m['content'] ?? ''), $messages));
 
         return (int) ceil($chars / 4);
+    }
+
+    /**
+     * Retrieve relevant RAG context chunks for the given query and return
+     * them as a formatted system message array ready to prepend to $messages.
+     * Returns an empty array when RAG is disabled or retrieval yields nothing.
+     *
+     * @return array<int, array{role: string, content: string}>
+     */
+    private function ragContext(string $query): array
+    {
+        if (!config('ai-chatbox.rag_enabled')) {
+            return [];
+        }
+
+        try {
+            $retriever = new RagRetriever(new EmbeddingService());
+            $chunks = $retriever->retrieve($query);
+
+            if (empty($chunks)) {
+                return [];
+            }
+
+            $context = "Relevant context from the knowledge base:\n\n"
+            . implode("\n\n---\n\n", $chunks);
+
+            return [['role' => 'system', 'content' => $context]];
+
+        } catch (\Throwable $e) {
+            Log::warning('AI Chatbox RAG retrieval failed', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 }

@@ -10,7 +10,7 @@
 
 A drop-in AI chatbox widget for Laravel — powered by **Vue 3** on the frontend and your choice of AI provider on the backend. One Blade directive, zero build tools required in your application.
 
-Messages are proxied through your Laravel backend to any **OpenAI-compatible API**. Defaults to **Ollama** running locally with the `phi3:mini` model.
+Messages are proxied through your Laravel backend to any **OpenAI-compatible API**. Defaults to **Ollama** running locally with the `phi3:mini` model. Includes a full **RAG (Retrieval-Augmented Generation)** system with an admin UI for uploading documents the AI can reference.
 
 ---
 
@@ -19,6 +19,9 @@ Messages are proxied through your Laravel backend to any **OpenAI-compatible API
 - **One-line integration** — drop `@aichatbox` anywhere in a Blade layout
 - **Vue 3 frontend** — reactive widget with no jQuery or external CDN dependencies
 - **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, LM Studio, or any OpenAI-compatible endpoint
+- **RAG (Retrieval-Augmented Generation)** — upload `.md`/`.txt` documents; the chatbox retrieves relevant context automatically on every message
+- **Admin Knowledge Base UI** — drag-and-drop document manager at `/ai-chatbox/rag` to upload, index, reprocess, and delete documents
+- **Real-time token streaming** — AI replies stream token-by-token via Server-Sent Events (SSE) with a blinking cursor
 - **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify`, both bundled (no CDN)
 - **Conversation threads** — each conversation gets a unique UUID thread; start a fresh thread any time without losing context of others
 - **Session memory** — server-side history per thread with configurable turn limit; context is automatically sent back to the AI on every message
@@ -82,6 +85,18 @@ php artisan vendor:publish --tag=ai-chatbox-assets
 # Publish config (optional — to customise defaults)
 php artisan vendor:publish --tag=ai-chatbox-config
 ```
+
+If you plan to use **RAG**, run the package migrations:
+
+```bash
+php artisan migrate
+```
+
+> Alternatively, publish the migration files first if you want to review or modify them:
+> ```bash
+> php artisan vendor:publish --tag=ai-chatbox-migrations
+> php artisan migrate
+> ```
 
 ---
 
@@ -203,18 +218,40 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `markdown` | `AI_CHATBOX_MARKDOWN` | `true` | Render AI replies as Markdown |
 | `sound` | `AI_CHATBOX_SOUND` | `true` | Play a ping when the AI replies |
 | `sound_volume` | `AI_CHATBOX_SOUND_VOLUME` | `0.3` | Volume — `0.0` silent, `1.0` full |
+| `stream` | `AI_CHATBOX_STREAM` | `true` | Stream AI replies token-by-token via SSE |
+
+### RAG (Retrieval-Augmented Generation)
+
+| Key | `.env` variable | Default | Description |
+|---|---|---|---|
+| `rag_enabled` | `AI_CHATBOX_RAG` | `false` | Master switch — enable RAG context injection |
+| `rag_embedding_url` | `AI_CHATBOX_EMBEDDING_URL` | `http://localhost:11434/v1/embeddings` | Embedding API endpoint |
+| `rag_embedding_model` | `AI_CHATBOX_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model name |
+| `rag_top_k` | `AI_CHATBOX_RAG_TOP_K` | `3` | Number of chunks retrieved per query |
+| `rag_chunk_size` | `AI_CHATBOX_RAG_CHUNK_SIZE` | `500` | Target chunk size in tokens (~4 chars/token) |
+| `rag_chunk_overlap` | `AI_CHATBOX_RAG_CHUNK_OVERLAP` | `50` | Overlap between consecutive chunks in tokens |
+| `rag_similarity_threshold` | `AI_CHATBOX_RAG_THRESHOLD` | `0.3` | Minimum cosine similarity score `0.0`–`1.0` |
+| `rag_admin_middleware` | — | `['web', 'auth']` | Middleware for the RAG admin UI (publish config to change) |
 
 ---
 
 ## Routes
 
-The package registers three routes under the configured prefix:
+The package registers the following routes under the configured prefix:
 
 ```
-GET  /ai-chatbox/health    Ping the AI service — used by the health check before opening
-POST /ai-chatbox/message   Send a user message and receive an AI reply
-POST /ai-chatbox/clear     Clear the server-side session conversation history
+GET    /ai-chatbox/health              Ping the AI service (health check)
+POST   /ai-chatbox/message             Send a message, receive a full JSON reply
+POST   /ai-chatbox/stream              Send a message, stream SSE token-by-token reply
+POST   /ai-chatbox/clear               Clear server-side session history for a thread
+
+GET    /ai-chatbox/rag                 RAG admin — list indexed documents      [auth]
+POST   /ai-chatbox/rag                 RAG admin — upload and index a document [auth]
+DELETE /ai-chatbox/rag/{id}            RAG admin — delete a document           [auth]
+POST   /ai-chatbox/rag/{id}/reprocess  RAG admin — re-chunk and re-embed       [auth]
 ```
+
+> RAG admin routes require an authenticated user by default (`rag_admin_middleware`). Publish the config to change this.
 
 ---
 
@@ -412,6 +449,167 @@ AI_CHATBOX_HISTORY=false
 
 ---
 
+## Real-Time Token Streaming
+
+When `AI_CHATBOX_STREAM=true` (default), AI replies are streamed token-by-token via **Server-Sent Events (SSE)**. The user sees each word appear as it is generated, with a blinking `▋` cursor while the response is in progress.
+
+```env
+AI_CHATBOX_STREAM=true    # stream token-by-token (default)
+AI_CHATBOX_STREAM=false   # wait for the full reply before displaying
+```
+
+**How it works:**
+
+1. The Vue frontend calls `POST /ai-chatbox/stream` using the Fetch API + `ReadableStream`
+2. The server proxies the AI API response using Guzzle's `'stream' => true` option and reads 1024-byte chunks
+3. Each token is emitted as an SSE event: `data: {"token":"Hello"}`
+4. The stream ends with `data: [DONE]`
+5. Markdown rendering is applied to the completed reply (not during streaming)
+
+**Server requirements:**
+
+```
+Nginx: add  proxy_buffering off;  to your server block
+       (the package sets X-Accel-Buffering: no automatically)
+PHP:   output_buffering = Off  in php.ini for best results
+```
+
+---
+
+## RAG — Retrieval-Augmented Generation
+
+RAG lets the chatbox answer questions about **your own data** — internal documents, company FAQs, product knowledge bases — without fine-tuning any model.
+
+```
+User asks a question
+     ↓
+Query is embedded → cosine similarity search across all indexed chunks
+     ↓
+Top-K most relevant chunks are injected as a system message
+     ↓
+AI answers with your knowledge-base context
+```
+
+### Quick start
+
+**1. Enable RAG in `.env`:**
+
+```env
+AI_CHATBOX_RAG=true
+AI_CHATBOX_EMBEDDING_URL=http://localhost:11434/v1/embeddings
+AI_CHATBOX_EMBEDDING_MODEL=nomic-embed-text
+```
+
+**2. Run the migration:**
+
+```bash
+php artisan migrate
+```
+
+**3. Upload documents at `/ai-chatbox/rag`** (requires an authenticated user by default).
+
+That's it — every subsequent chat message will automatically retrieve and inject relevant context.
+
+---
+
+### Embedding providers
+
+RAG uses a **separate embedding API** (different from the chat API). Any provider that exposes an `/embeddings` endpoint works.
+
+| Provider | `AI_CHATBOX_EMBEDDING_URL` | `AI_CHATBOX_EMBEDDING_MODEL` |
+|---|---|---|
+| Ollama (local) | `http://localhost:11434/v1/embeddings` | `nomic-embed-text` |
+| Ollama (local) | `http://localhost:11434/v1/embeddings` | `mxbai-embed-large` |
+| LM Studio | `http://localhost:1234/v1/embeddings` | your loaded embedding model |
+| OpenAI | `https://api.openai.com/v1/embeddings` | `text-embedding-3-small` |
+| OpenAI | `https://api.openai.com/v1/embeddings` | `text-embedding-3-large` |
+
+> **Ollama:** Pull an embedding model first:
+> ```bash
+> ollama pull nomic-embed-text
+> ```
+
+---
+
+### Document formats
+
+| Format | Extension | Notes |
+|---|---|---|
+| Plain text | `.txt` | Chunked directly |
+| Markdown | `.md` | Chunked directly — heading structure is preserved |
+
+Maximum upload size: **10 MB** per file.
+
+---
+
+### Admin Knowledge Base UI
+
+Visit **`/ai-chatbox/rag`** in your browser (authenticated users only).
+
+| Action | Description |
+|---|---|
+| **Upload** | Select a `.md` or `.txt` file, optionally set a display title, click *Upload & Index* |
+| **Reprocess** | Re-chunk and re-embed an existing document (e.g. after changing chunk size settings) |
+| **Delete** | Remove the document and all its chunks permanently |
+
+The page shows each document's indexing status (`Pending` → `Processing` → `Ready` / `Failed`), chunk count, and the error message if embedding failed.
+
+---
+
+### How chunking works
+
+Documents are split into overlapping chunks before embedding:
+
+```
+chunk_size   = AI_CHATBOX_RAG_CHUNK_SIZE   (default 500 tokens ≈ 2 000 chars)
+chunk_overlap = AI_CHATBOX_RAG_CHUNK_OVERLAP (default 50 tokens ≈ 200 chars)
+```
+
+The chunker:
+1. Splits on paragraph boundaries (two or more blank lines)
+2. Falls back to sentence boundaries (`. ! ?`) for oversized paragraphs
+3. Carries over the last `chunk_overlap` characters into the next chunk so context is not lost at boundaries
+
+---
+
+### How retrieval works
+
+On every chat message:
+
+1. The user's message is embedded using the same embedding model
+2. Cosine similarity is computed **in PHP** against every chunk stored in the database
+3. Chunks below `rag_similarity_threshold` (default `0.3`) are discarded
+4. The top `rag_top_k` (default `3`) chunks are prepended to the AI's context as a system message:
+
+```
+Relevant context from the knowledge base:
+
+[chunk 1 content]
+
+---
+
+[chunk 2 content]
+```
+
+5. The AI answers as normal, but now has access to your private data
+
+> **Performance note:** Similarity is computed in PHP for simplicity and works well for up to a few thousand chunks. For very large knowledge bases, publish the migrations and switch to a database with native vector support (e.g. `pgvector` for PostgreSQL).
+
+---
+
+### Protecting the admin UI
+
+By default `rag_admin_middleware` is `['web', 'auth']`, which requires an authenticated Laravel user. To customise, publish the config and edit the array:
+
+```php
+// config/ai-chatbox.php
+'rag_admin_middleware' => ['web', 'auth:sanctum'],
+// or restrict to admins:
+'rag_admin_middleware' => ['web', 'auth', 'can:manage-ai-knowledge'],
+```
+
+---
+
 ## Token Control
 
 The package provides two layers of control over how many tokens are sent to the AI per request.
@@ -537,7 +735,7 @@ If the chatbox shows an offline toast or requests fail, check `storage/logs/lara
 composer test
 ```
 
-The test suite covers all backend behaviour — controller responses, error classification, session history, conversation thread isolation, token-based context trimming, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
+The test suite covers all backend behaviour — controller responses, error classification, session history, conversation thread isolation, token-based context trimming, SSE streaming, RAG document upload/delete/reprocess, RAG context injection into chat, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
 
 ---
 

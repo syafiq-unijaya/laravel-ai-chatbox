@@ -11,7 +11,7 @@ use SyafiqUnijaya\AiChatbox\Http\Middleware\CorsMiddleware;
 
 class AiChatboxServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.4.0';
+    public const VERSION = '1.5.0';
 
     public function register(): void
     {
@@ -33,6 +33,7 @@ class AiChatboxServiceProvider extends ServiceProvider
         }
 
         $this->loadViewsFrom(__DIR__ . '/resources/views', 'ai-chatbox');
+        $this->loadMigrationsFrom(__DIR__ . '/Database/Migrations');
 
         // Compute once at boot — app.url never changes at runtime
         View::share('aiChatboxAppHash', substr(md5(config('app.url', 'default')), 0, 8));
@@ -47,8 +48,14 @@ class AiChatboxServiceProvider extends ServiceProvider
     {
         Route::aliasMiddleware('ai-chatbox.cors', CorsMiddleware::class);
 
+        // Chatbox API routes (CORS + throttle protected)
         Route::group($this->routeConfiguration(), function () {
             $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        });
+
+        // RAG admin routes (auth protected, no CORS/throttle needed)
+        Route::group($this->ragRouteConfiguration(), function () {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/rag.php');
         });
     }
 
@@ -69,6 +76,14 @@ class AiChatboxServiceProvider extends ServiceProvider
         ];
     }
 
+    protected function ragRouteConfiguration(): array
+    {
+        return [
+            'prefix' => config('ai-chatbox.route_prefix') . '/rag',
+            'middleware' => config('ai-chatbox.rag_admin_middleware', ['web', 'auth']),
+        ];
+    }
+
     protected function registerPublishing(): void
     {
         if ($this->app->runningInConsole()) {
@@ -86,6 +101,11 @@ class AiChatboxServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/resources/assets' => public_path('vendor/ai-chatbox'),
             ], 'ai-chatbox-assets');
+
+            // Migrations
+            $this->publishes([
+                __DIR__ . '/Database/Migrations' => database_path('migrations'),
+            ], 'ai-chatbox-migrations');
         }
     }
 

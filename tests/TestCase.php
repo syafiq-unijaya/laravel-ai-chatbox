@@ -22,12 +22,23 @@ abstract class TestCase extends Orchestra
         $app['config']->set('app.debug', false);
         $app['config']->set('session.driver', 'array');
 
+        // SQLite in-memory for RAG model tests
+        $app['config']->set('database.default', 'testingdb');
+        $app['config']->set('database.connections.testingdb', [
+            'driver'   => 'sqlite',
+            'database' => ':memory:',
+            'prefix'   => '',
+        ]);
+
         $app['config']->set('ai-chatbox.api_url', 'http://ai.example.com/v1/chat/completions');
         $app['config']->set('ai-chatbox.api_token', 'test-token');
         $app['config']->set('ai-chatbox.api_model', 'test-model');
         $app['config']->set('ai-chatbox.ssrf_protection', false);
         $app['config']->set('ai-chatbox.allowed_origins', ['http://localhost']);
         $app['config']->set('ai-chatbox.offline_message', 'AI service is currently unreachable.');
+        $app['config']->set('ai-chatbox.rag_enabled', false);
+        $app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
+        $app['config']->set('ai-chatbox.rag_embedding_model', 'test-embed');
     }
 
     protected function setUp(): void

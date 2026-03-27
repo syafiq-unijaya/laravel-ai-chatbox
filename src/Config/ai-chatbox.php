@@ -254,4 +254,37 @@ return [
 
     'timeout' => env('AI_CHATBOX_TIMEOUT', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | RAG — Retrieval-Augmented Generation
+    |--------------------------------------------------------------------------
+    | When enabled, the chatbox retrieves relevant context from your uploaded
+    | knowledge-base documents and injects it into every AI request.
+    |
+    | 'rag_enabled'              — master switch (default: false)
+    | 'rag_embedding_url'        — endpoint for generating text embeddings.
+    |                              Ollama:  http://localhost:11434/v1/embeddings
+    |                              OpenAI:  https://api.openai.com/v1/embeddings
+    |                              LM Studio: http://localhost:1234/v1/embeddings
+    | 'rag_embedding_model'      — embedding model name.
+    |                              Ollama: nomic-embed-text, mxbai-embed-large
+    |                              OpenAI: text-embedding-3-small
+    | 'rag_top_k'                — number of chunks to retrieve per query (default: 3)
+    | 'rag_chunk_size'           — target chunk size in tokens (~4 chars/token, default: 500)
+    | 'rag_chunk_overlap'        — overlap between chunks in tokens (default: 50)
+    | 'rag_similarity_threshold' — minimum cosine similarity score 0.0–1.0 (default: 0.3)
+    | 'rag_admin_middleware'     — middleware for the admin document-management UI.
+    |                              Default: ['web', 'auth'] — requires an authenticated user.
+    |                              Change to ['web'] to make it publicly accessible (not recommended).
+    */
+
+    'rag_enabled' => env('AI_CHATBOX_RAG', false),
+    'rag_embedding_url' => env('AI_CHATBOX_EMBEDDING_URL', 'http://localhost:11434/v1/embeddings'),
+    'rag_embedding_model' => env('AI_CHATBOX_EMBEDDING_MODEL', 'nomic-embed-text'),
+    'rag_top_k' => (int) env('AI_CHATBOX_RAG_TOP_K', 3),
+    'rag_chunk_size' => (int) env('AI_CHATBOX_RAG_CHUNK_SIZE', 500),
+    'rag_chunk_overlap' => (int) env('AI_CHATBOX_RAG_CHUNK_OVERLAP', 50),
+    'rag_similarity_threshold' => (float) env('AI_CHATBOX_RAG_THRESHOLD', 0.3),
+    'rag_admin_middleware' => ['web', 'auth'],
+
 ];
