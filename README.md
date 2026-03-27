@@ -1,23 +1,46 @@
 # laravel-ai-chatbox
 
 [![Tests](https://github.com/syafiq-unijaya/laravel-ai-chatbox/actions/workflows/tests.yml/badge.svg)](https://github.com/syafiq-unijaya/laravel-ai-chatbox/actions/workflows/tests.yml)
-[![Latest Version](https://img.shields.io/packagist/v/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
-[![Downloads](https://img.shields.io/packagist/dt/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![Latest Version](https://img.shields.io/packagist/v/syafiq-unijaya/laravel-ai-chatbox.svg?label=packagist)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![Total Downloads](https://img.shields.io/packagist/dt/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
 [![PHP](https://img.shields.io/packagist/php-v/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
-[![License](https://img.shields.io/packagist/l/syafiq-unijaya/laravel-ai-chatbox.svg)](https://packagist.org/packages/syafiq-unijaya/laravel-ai-chatbox)
+[![Laravel](https://img.shields.io/badge/Laravel-10%20|%2011%20|%2012-FF2D20?logo=laravel&logoColor=white)](https://laravel.com)
+[![Vue.js](https://img.shields.io/badge/Vue.js-3-42b883?logo=vue.js&logoColor=white)](https://vuejs.org)
+[![License](https://img.shields.io/packagist/l/syafiq-unijaya/laravel-ai-chatbox.svg)](LICENSE)
 
-A configurable AI chatbox widget for Laravel. Drop it into any project via Composer — no build tools required on your end.
+A drop-in AI chatbox widget for Laravel — powered by **Vue 3** on the frontend and your choice of AI provider on the backend. One Blade directive, zero build tools required in your application.
 
-Messages are proxied through your Laravel backend to any OpenAI-compatible API.
+Messages are proxied through your Laravel backend to any **OpenAI-compatible API**. Defaults to **Ollama** running locally with the `phi3:mini` model.
 
-Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
+---
+
+## Features
+
+- **One-line integration** — drop `@aichatbox` anywhere in a Blade layout
+- **Vue 3 frontend** — reactive widget with no jQuery or external CDN dependencies
+- **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, or any OpenAI-compatible endpoint
+- **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify`, both bundled (no CDN)
+- **Conversation history** — server-side session memory with configurable turn limit
+- **Browser persistence** — chat history survives page refresh via `localStorage` or `sessionStorage`
+- **Health check** — pings the AI service before opening; shows an offline toast if unreachable
+- **Sound notifications** — Web Audio API ping on AI reply, no audio file needed
+- **Dark mode** — automatic via `prefers-color-scheme`
+- **SSRF protection** — blocks requests to private/reserved IPs on the health endpoint
+- **CORS middleware** — restricts chatbox routes to your own origin
+- **Rate limiting** — configurable per-IP throttle on all endpoints
+- **4 widget positions** — bottom-right, bottom-left, top-right, top-left
+- **Fully configurable** — all options controllable via `.env` or published config
 
 ---
 
 ## Requirements
 
-- PHP 8.2+
-- Laravel 10 / 11 / 12
+| Requirement | Version |
+|---|---|
+| PHP | 8.2+ |
+| Laravel | 10, 11, or 12 |
+
+> No Node.js or npm required in your application — the Vue bundle is pre-compiled and published as a static asset.
 
 ---
 
@@ -25,7 +48,7 @@ Defaults to **Ollama** running locally (e.g. on WSL) with the `phi3:mini` model.
 
 ### 1. Install via Composer
 
-**From Packagist (once published):**
+**From Packagist:**
 ```bash
 composer require syafiq-unijaya/laravel-ai-chatbox
 ```
@@ -50,12 +73,11 @@ Then run `composer update`.
 
 ### 2. Publish assets
 
-#### Publish CSS + JS to public/vendor/ai-chatbox/
 ```bash
+# Publish CSS + JS to public/vendor/ai-chatbox/
 php artisan vendor:publish --tag=ai-chatbox-assets
-```
-#### Publish config (optional — to override defaults)
-```bash
+
+# Publish config (optional — to customise defaults)
 php artisan vendor:publish --tag=ai-chatbox-config
 ```
 
@@ -80,11 +102,12 @@ AI_CHATBOX_LANGUAGE=English
 > ```
 > ```env
 > AI_CHATBOX_API_URL=http://172.x.x.x:11434/v1/chat/completions
+> AI_CHATBOX_SSRF_PROTECTION=false
 > ```
 
 > **Local Ollama + SSRF protection?**
-> SSRF protection is enabled by default and blocks requests to private IPs (including `localhost`).
-> Disable it for local development:
+> SSRF protection is enabled by default and blocks requests to private IPs including `localhost`.
+> Disable for local development:
 > ```env
 > AI_CHATBOX_SSRF_PROTECTION=false
 > ```
@@ -113,58 +136,52 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `api_url` | `AI_CHATBOX_API_URL` | `http://localhost:11434/v1/chat/completions` | AI API endpoint |
 | `api_token` | `AI_CHATBOX_API_TOKEN` | `ollama` | Bearer token |
 | `api_model` | `AI_CHATBOX_API_MODEL` | `phi3:mini` | Model name |
-| `timeout` | `AI_CHATBOX_TIMEOUT` | `30` | Seconds before the API request times out |
+| `timeout` | `AI_CHATBOX_TIMEOUT` | `30` | Seconds before the request times out |
 
 ### Response Language & System Prompt
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `language` | `AI_CHATBOX_LANGUAGE` | `English` | Language the AI must always reply in — leave empty to let the model decide |
-| `system_prompt` | `AI_CHATBOX_SYSTEM_PROMPT` | `You are a helpful assistant...` | System message sent on every request — use `{language}` as a placeholder for the configured language |
+| `system_prompt` | `AI_CHATBOX_SYSTEM_PROMPT` | `You are a helpful assistant...` | System message sent on every request — use `{language}` as a placeholder |
 
 ### Response Tuning
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `temperature` | `AI_CHATBOX_TEMPERATURE` | `0.7` | Creativity — `0.0` deterministic, `1.0` creative |
-| `max_tokens` | `AI_CHATBOX_MAX_TOKENS` | `null` | Max reply length — omit to let the model decide |
+| `max_tokens` | `AI_CHATBOX_MAX_TOKENS` | `null` | Max reply length — `null` lets the model decide |
 
 ### Conversation History
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `history_enabled` | `AI_CHATBOX_HISTORY` | `true` | Send previous messages for context |
-| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `50` | Max user+assistant pairs to keep in session |
+| `history_limit` | `AI_CHATBOX_HISTORY_LIMIT` | `50` | Max user+assistant pairs kept in session |
 
 ### Routes & Middleware
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
 | `route_prefix` | — | `ai-chatbox` | URL prefix for all chatbox routes |
-| `middleware` | — | `['web', 'throttle:20,1', 'ai-chatbox.cors']` | Middleware applied to all routes |
+| `middleware` | — | `['web', 'throttle:20,1', 'ai-chatbox.cors']` | Middleware stack |
 | `rate_limit` | `AI_CHATBOX_RATE_LIMIT` | `20` | Max requests per window per IP |
 | `rate_window` | `AI_CHATBOX_RATE_WINDOW` | `1` | Rate limit window in minutes |
 | `health_check` | `AI_CHATBOX_HEALTH_CHECK` | `true` | Ping the AI service before opening the chatbox |
-| `offline_message` | `AI_CHATBOX_OFFLINE_MESSAGE` | `AI service is currently unreachable.` | Message shown in the toast when the AI service is offline |
-
-To require authenticated users, add `'auth'` (or your guard) to the `middleware` array after publishing the config:
-
-```php
-'middleware' => ['web', 'throttle:20,1', 'ai-chatbox.cors', 'auth'],
-```
+| `offline_message` | `AI_CHATBOX_OFFLINE_MESSAGE` | `AI service is currently unreachable.` | Toast message shown when the AI service is offline |
 
 ### Security
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
-| `ssrf_protection` | `AI_CHATBOX_SSRF_PROTECTION` | `true` | Block health check requests to private/reserved IPs |
+| `ssrf_protection` | `AI_CHATBOX_SSRF_PROTECTION` | `true` | Block requests to private/reserved IPs |
 | `allowed_origins` | — | `[env('APP_URL')]` | Origins permitted to call chatbox endpoints (CORS) |
 
 ### Storage
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
-| `storage` | `AI_CHATBOX_STORAGE` | `local` | Browser storage driver — `local` (persists across sessions) or `session` (clears on tab close) |
+| `storage` | `AI_CHATBOX_STORAGE` | `local` | Browser storage — `local` (persists across sessions) or `session` (clears on tab close) |
 
 ### Widget Appearance
 
@@ -172,9 +189,9 @@ To require authenticated users, add `'auth'` (or your guard) to the `middleware`
 |---|---|---|---|
 | `title` | `AI_CHATBOX_TITLE` | `AI Assistant` | Header title |
 | `placeholder` | — | `Type your message...` | Input placeholder text |
-| `theme_color` | — | `#4f46e5` | Primary colour (applied via CSS variable) |
-| `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — see below |
-| `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message shown on first open — leave empty to disable |
+| `theme_color` | — | `#4f46e5` | Primary colour (CSS variable) |
+| `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — `bottom-right`, `bottom-left`, `top-right`, `top-left` |
+| `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message on first open — leave empty to disable |
 
 ### Features
 
@@ -191,10 +208,68 @@ To require authenticated users, add `'auth'` (or your guard) to the `middleware`
 The package registers three routes under the configured prefix:
 
 ```
-GET  /ai-chatbox/health    Check if the AI service is reachable
-POST /ai-chatbox/message   Send a message to the AI
-POST /ai-chatbox/clear     Clear the session conversation history
+GET  /ai-chatbox/health    Ping the AI service — used by the health check before opening
+POST /ai-chatbox/message   Send a user message and receive an AI reply
+POST /ai-chatbox/clear     Clear the server-side session conversation history
 ```
+
+---
+
+## AI Provider Examples
+
+Any OpenAI-compatible API works — just update the `.env` values.
+
+### Ollama (local)
+
+```env
+AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
+AI_CHATBOX_API_TOKEN=ollama
+AI_CHATBOX_API_MODEL=phi3:mini
+AI_CHATBOX_SSRF_PROTECTION=false
+```
+
+### Ollama Cloud
+
+```env
+AI_CHATBOX_API_URL=https://ollama.com/api/chat
+AI_CHATBOX_API_TOKEN=your_ollama_api_key
+AI_CHATBOX_API_MODEL=gpt-oss:120b
+```
+
+### OpenAI
+
+```env
+AI_CHATBOX_API_URL=https://api.openai.com/v1/chat/completions
+AI_CHATBOX_API_TOKEN=sk-...
+AI_CHATBOX_API_MODEL=gpt-4o
+```
+
+### Groq
+
+```env
+AI_CHATBOX_API_URL=https://api.groq.com/openai/v1/chat/completions
+AI_CHATBOX_API_TOKEN=gsk_...
+AI_CHATBOX_API_MODEL=llama-3.3-70b-versatile
+```
+
+### OpenRouter
+
+```env
+AI_CHATBOX_API_URL=https://openrouter.ai/api/v1/chat/completions
+AI_CHATBOX_API_TOKEN=sk-or-...
+AI_CHATBOX_API_MODEL=mistralai/mistral-7b-instruct
+```
+
+### LM Studio (local)
+
+```env
+AI_CHATBOX_API_URL=http://localhost:1234/v1/chat/completions
+AI_CHATBOX_API_TOKEN=lm-studio
+AI_CHATBOX_API_MODEL=your-loaded-model-name
+AI_CHATBOX_SSRF_PROTECTION=false
+```
+
+> Start LM Studio, load a model, and enable the **Local Server** tab. The model name must match exactly what LM Studio displays (e.g. `lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF`).
 
 ---
 
@@ -204,19 +279,17 @@ POST /ai-chatbox/clear     Clear the session conversation history
 
 The health check endpoint pings the configured `api_url` to verify the AI service is reachable. To prevent Server-Side Request Forgery (SSRF) attacks, requests to private and reserved IP ranges are blocked by default (`localhost`, `10.x`, `172.16.x`, `192.168.x`, `169.254.x`).
 
-**Production** — leave enabled (default):
 ```env
+# Production — leave enabled (default)
 AI_CHATBOX_SSRF_PROTECTION=true
-```
 
-**Local development** (e.g. Ollama on `localhost`) — disable:
-```env
+# Local development (e.g. Ollama on localhost) — disable
 AI_CHATBOX_SSRF_PROTECTION=false
 ```
 
 ### CORS
 
-The package registers a CORS middleware (`ai-chatbox.cors`) that restricts chatbox endpoints to requests originating from your application's own URL. Cross-origin requests from other domains are rejected with a `403`.
+The package registers a CORS middleware (`ai-chatbox.cors`) that restricts chatbox endpoints to requests originating from your application's own URL. Cross-origin requests from other domains are rejected with `403`.
 
 To permit additional origins, publish the config and update `allowed_origins`:
 
@@ -233,19 +306,19 @@ The package does not enforce authentication by default, allowing guest users to 
 
 ```php
 'middleware' => ['web', 'throttle:20,1', 'ai-chatbox.cors', 'auth'],
-// or for Sanctum:
+// or Sanctum:
 'middleware' => ['web', 'throttle:20,1', 'ai-chatbox.cors', 'auth:sanctum'],
 ```
 
 ### Sensitive Data
 
-Conversation history is persisted in the browser's `localStorage` by default. If your users may discuss sensitive information, switch to `sessionStorage`, which is automatically cleared when the browser tab is closed:
+Conversation history is persisted in the browser's `localStorage` by default. If your users may discuss sensitive information, switch to `sessionStorage`, which is automatically cleared when the tab is closed:
 
 ```env
 AI_CHATBOX_STORAGE=session
 ```
 
-> **Note:** Do not discuss passwords, tokens, or other secrets in the chatbox regardless of the storage driver, as any JavaScript running on the page can access browser storage.
+> **Note:** Do not discuss passwords, tokens, or other secrets in the chatbox regardless of the storage driver — any JavaScript running on the page can access browser storage.
 
 ---
 
@@ -277,11 +350,9 @@ AI_CHATBOX_SYSTEM_PROMPT="You are a customer support agent for Acme Corp. Always
 
 ## Widget Position
 
-Supported values for `position`:
-
 | Value | Location |
 |---|---|
-| `bottom-right` | Bottom-right corner (default) |
+| `bottom-right` | Bottom-right corner *(default)* |
 | `bottom-left` | Bottom-left corner |
 | `top-right` | Top-right corner |
 | `top-left` | Top-left corner |
@@ -296,9 +367,9 @@ AI_CHATBOX_POSITION=bottom-left
 
 ## Health Check
 
-When enabled (default), clicking the chat button first sends a lightweight ping to the AI service base URL. The window only opens if the service is reachable. If unreachable, a toast message is shown near the button for 4 seconds.
+When enabled (default), clicking the chat button first sends a lightweight ping to the AI service. The window only opens if the service is reachable. If unreachable, a toast message is shown near the button for 4 seconds.
 
-Disable for trusted internal environments:
+Disable for trusted internal environments where the service is always online:
 
 ```env
 AI_CHATBOX_HEALTH_CHECK=false
@@ -313,7 +384,7 @@ AI replies are rendered as Markdown by default using [marked.js](https://marked.
 - Bold, italic, strikethrough
 - Bullet and numbered lists
 - Inline code and fenced code blocks (dark theme)
-- Blockquotes, headings, tables, horizontal rules
+- Blockquotes, headings (H1–H3), tables, horizontal rules
 - Links
 
 Disable to display replies as plain text:
@@ -342,44 +413,22 @@ Published to `resources/views/vendor/ai-chatbox/chatbox.blade.php`.
 
 ---
 
-## Using with Other AI Providers
+## Frontend Architecture
 
-Any OpenAI-compatible API works — just swap the `.env` values.
+The widget frontend is built with **Vue 3** (Composition API) and compiled to a self-contained IIFE bundle using **Vite**. The bundle includes Vue, `axios`, `marked`, and `DOMPurify` — your Laravel application requires no Node.js tooling.
 
-**Ollama local — different model:**
-```env
-AI_CHATBOX_API_URL=http://localhost:11434/v1/chat/completions
-AI_CHATBOX_API_TOKEN=ollama
-AI_CHATBOX_API_MODEL=llama3
-AI_CHATBOX_SSRF_PROTECTION=false
+```
+src/resources/js/
+├── app.js                   # Entry point — mounts Vue to #ai-chatbox-app
+└── components/
+    └── AiChatbox.vue        # Single-file component (template + logic + styles)
 ```
 
-**Ollama cloud:**
-```env
-AI_CHATBOX_API_URL=https://ollama.com/api/chat
-AI_CHATBOX_API_TOKEN=your_ollama_api_key
-AI_CHATBOX_API_MODEL=gpt-oss:120b
-```
+To rebuild the frontend assets (package contributors only):
 
-**OpenAI:**
-```env
-AI_CHATBOX_API_URL=https://api.openai.com/v1/chat/completions
-AI_CHATBOX_API_TOKEN=sk-...
-AI_CHATBOX_API_MODEL=gpt-4o
-```
-
-**Groq:**
-```env
-AI_CHATBOX_API_URL=https://api.groq.com/openai/v1/chat/completions
-AI_CHATBOX_API_TOKEN=gsk_...
-AI_CHATBOX_API_MODEL=llama-3.3-70b-versatile
-```
-
-**OpenRouter:**
-```env
-AI_CHATBOX_API_URL=https://openrouter.ai/api/v1/chat/completions
-AI_CHATBOX_API_TOKEN=sk-or-...
-AI_CHATBOX_API_MODEL=mistralai/mistral-7b-instruct
+```bash
+npm install
+npm run build   # outputs to src/resources/assets/
 ```
 
 ---
@@ -390,6 +439,16 @@ If the chatbox shows an offline toast or requests fail, check `storage/logs/lara
 
 ---
 
+## Testing
+
+```bash
+composer test
+```
+
+The test suite covers all backend behaviour — controller responses, error classification, session history, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
+
+---
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for details.

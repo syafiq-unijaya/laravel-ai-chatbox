@@ -146,6 +146,20 @@ AI_CHATBOX_TIMEOUT=120   # increase to 120 seconds
 | Ollama (OpenAI-compatible) | `http://localhost:11434/v1/chat/completions` |
 | Ollama (native) | `http://localhost:11434/api/chat` |
 | Ollama cloud | `https://ollama.com/api/chat` |
+| LM Studio | `http://localhost:1234/v1/chat/completions` |
 | OpenAI | `https://api.openai.com/v1/chat/completions` |
 | Groq | `https://api.groq.com/openai/v1/chat/completions` |
 | OpenRouter | `https://openrouter.ai/api/v1/chat/completions` |
+
+### LM Studio not connecting
+
+**Symptom:** `E07` (connection refused) or `E05` (SSRF blocked)
+
+```env
+AI_CHATBOX_API_URL=http://localhost:1234/v1/chat/completions
+AI_CHATBOX_API_TOKEN=lm-studio
+AI_CHATBOX_API_MODEL=your-loaded-model-name   # must match exactly what LM Studio shows
+AI_CHATBOX_SSRF_PROTECTION=false              # required — localhost is a private IP
+```
+
+Make sure the **Local Server** is started inside LM Studio and a model is loaded before sending requests.
