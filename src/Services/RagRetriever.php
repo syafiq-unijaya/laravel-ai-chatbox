@@ -1,6 +1,7 @@
 <?php
 namespace SyafiqUnijaya\AiChatbox\Services;
 
+use Illuminate\Support\Facades\Log;
 use SyafiqUnijaya\AiChatbox\Models\RagChunk;
 
 class RagRetriever
@@ -29,6 +30,10 @@ class RagRetriever
         $queryEmbedding = $this->embedder->embed($query);
 
         if ($queryEmbedding === null) {
+            Log::warning('AI Chatbox RAG: Query embedding failed — RAG context will not be injected for this message.', [
+                'embedding_url' => config('ai-chatbox.rag_embedding_url'),
+                'embedding_model' => config('ai-chatbox.rag_embedding_model'),
+            ]);
             return [];
         }
 
@@ -43,11 +48,24 @@ class RagRetriever
         }
 
         $scored = [];
+        $nullEmbeddings = 0;
+        $belowThreshold = 0;
 
         foreach ($chunks as $chunk) {
             $embedding = $chunk->embedding;
 
-            if (!is_array($embedding) || count($embedding) !== count($queryEmbedding)) {
+            if (!is_array($embedding) || count($embedding) === 0) {
+                $nullEmbeddings++;
+                continue;
+            }
+
+            if (count($embedding) !== count($queryEmbedding)) {
+                Log::warning('AI Chatbox RAG: Chunk embedding dimension mismatch — skipping chunk.', [
+                    'chunk_id' => $chunk->id,
+                    'chunk_dims' => count($embedding),
+                    'query_dims' => count($queryEmbedding),
+                    'embedding_model' => config('ai-chatbox.rag_embedding_model'),
+                ]);
                 continue;
             }
 
@@ -55,10 +73,26 @@ class RagRetriever
 
             if ($score >= $threshold) {
                 $scored[] = ['content' => $chunk->content, 'score' => $score];
+            } else {
+                $belowThreshold++;
             }
         }
 
+        if ($nullEmbeddings > 0) {
+            Log::warning('AI Chatbox RAG: Skipped chunks with no stored embedding — reprocess the document to fix.', [
+                'skipped_count' => $nullEmbeddings,
+                'embedding_url' => config('ai-chatbox.rag_embedding_url'),
+                'embedding_model' => config('ai-chatbox.rag_embedding_model'),
+            ]);
+        }
+
         if (empty($scored)) {
+            if ($belowThreshold > 0) {
+                Log::info('AI Chatbox RAG: No chunks met the similarity threshold — consider lowering AI_CHATBOX_RAG_THRESHOLD.', [
+                    'threshold' => $threshold,
+                    'chunks_scored' => $belowThreshold,
+                ]);
+            }
             return [];
         }
 

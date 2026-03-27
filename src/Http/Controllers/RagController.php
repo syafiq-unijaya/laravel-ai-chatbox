@@ -126,8 +126,20 @@ class RagController extends Controller
         $document->chunks()->delete();
 
         $count = 0;
+        $embedFailed = 0;
+
         foreach ($textChunks as $i => $chunkText) {
             $embedding = $embedSvc->embed($chunkText);
+
+            if ($embedding === null) {
+                $embedFailed++;
+                \Illuminate\Support\Facades\Log::warning('AI Chatbox RAG: Chunk embedding failed — chunk will be stored without a vector and skipped during retrieval.', [
+                    'document_id' => $document->id,
+                    'chunk_index' => $i,
+                    'embedding_url' => config('ai-chatbox.rag_embedding_url'),
+                    'embedding_model' => config('ai-chatbox.rag_embedding_model'),
+                ]);
+            }
 
             RagChunk::create([
                 'document_id' => $document->id,
@@ -138,9 +150,31 @@ class RagController extends Controller
             $count++;
         }
 
+        if ($embedFailed === $count) {
+            // Every embedding failed — document is unusable for retrieval
+            $document->update([
+                'status' => 'failed',
+                'chunk_count' => $count,
+                'error_message' => "Embedding failed for all {$count} chunks. Check AI_CHATBOX_EMBEDDING_URL ("
+                . config('ai-chatbox.rag_embedding_url') . ') and AI_CHATBOX_EMBEDDING_MODEL ('
+                . config('ai-chatbox.rag_embedding_model') . ').',
+            ]);
+            \Illuminate\Support\Facades\Log::error('AI Chatbox RAG: All chunk embeddings failed — document marked as failed.', [
+                'document_id' => $document->id,
+                'title' => $document->title,
+                'embedding_url' => config('ai-chatbox.rag_embedding_url'),
+            ]);
+            return;
+        }
+
+        $errorMessage = $embedFailed > 0
+        ? "{$embedFailed} of {$count} chunks failed to embed and will be skipped during retrieval."
+        : null;
+
         $document->update([
             'status' => 'ready',
             'chunk_count' => $count,
+            'error_message' => $errorMessage,
         ]);
     }
 }

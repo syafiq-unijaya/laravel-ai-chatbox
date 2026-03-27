@@ -4,22 +4,16 @@ namespace SyafiqUnijaya\AiChatbox\Tests\Unit;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-use SyafiqUnijaya\AiChatbox\Http\Controllers\ChatboxController;
+use SyafiqUnijaya\AiChatbox\Engine\OpenAiCompatibleEngine;
 
 class ErrorClassificationTest extends TestCase
 {
-    private ChatboxController $controller;
-    private ReflectionMethod $classifyConnect;
-    private ReflectionMethod $classifyStatus;
+    private OpenAiCompatibleEngine $engine;
 
     protected function setUp(): void
     {
         parent::setUp();
-
-        $this->controller      = new ChatboxController();
-        $this->classifyConnect = new ReflectionMethod(ChatboxController::class, 'classifyConnectException');
-        $this->classifyStatus  = new ReflectionMethod(ChatboxController::class, 'classifyHttpStatus');
+        $this->engine = new OpenAiCompatibleEngine();
     }
 
     private function connectException(string $message): ConnectException
@@ -29,12 +23,12 @@ class ErrorClassificationTest extends TestCase
 
     private function classifyConnect(string $message): string
     {
-        return $this->classifyConnect->invoke($this->controller, $this->connectException($message));
+        return $this->engine->classifyConnectException($this->connectException($message));
     }
 
     private function classifyStatus(int $status): string
     {
-        return $this->classifyStatus->invoke($this->controller, $status);
+        return $this->engine->classifyHttpStatus($status);
     }
 
     // ── classifyConnectException ──────────────────────────────────────────────

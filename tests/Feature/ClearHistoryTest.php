@@ -1,6 +1,8 @@
 <?php
 namespace SyafiqUnijaya\AiChatbox\Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use SyafiqUnijaya\AiChatbox\Memory\DatabaseConversationRepository;
 use SyafiqUnijaya\AiChatbox\Tests\TestCase;
 
 class ClearHistoryTest extends TestCase
@@ -63,5 +65,44 @@ class ClearHistoryTest extends TestCase
 
         $this->assertNull(session($keyA));
         $this->assertNotNull(session($keyB));
+    }
+
+    // ── Database memory driver ────────────────────────────────────────────────
+
+    public function test_clear_removes_db_history_for_thread(): void
+    {
+        $this->useDatabase();
+
+        $threadId = '550e8400-e29b-4d4f-a716-446655440000';
+        $repo     = new DatabaseConversationRepository();
+
+        $repo->saveHistory($threadId, [
+            ['role' => 'user',      'content' => 'Hello'],
+            ['role' => 'assistant', 'content' => 'Hi!'],
+        ]);
+
+        $this->postJson('/ai-chatbox/clear', ['thread_id' => $threadId])
+             ->assertOk()
+             ->assertJsonFragment(['status' => 'ok']);
+
+        $this->assertSame([], $repo->getHistory($threadId));
+        $this->assertDatabaseCount('ai_chatbox_messages', 0);
+    }
+
+    public function test_clear_db_does_not_affect_other_threads(): void
+    {
+        $this->useDatabase();
+
+        $threadA = '550e8400-e29b-4d4f-a716-446655440000';
+        $threadB = '6ba7b810-9dad-4d4f-80b4-00c04fd430c8';
+        $repo    = new DatabaseConversationRepository();
+
+        $repo->saveHistory($threadA, [['role' => 'user', 'content' => 'A']]);
+        $repo->saveHistory($threadB, [['role' => 'user', 'content' => 'B']]);
+
+        $this->postJson('/ai-chatbox/clear', ['thread_id' => $threadA]);
+
+        $this->assertSame([], $repo->getHistory($threadA));
+        $this->assertCount(1,  $repo->getHistory($threadB));
     }
 }

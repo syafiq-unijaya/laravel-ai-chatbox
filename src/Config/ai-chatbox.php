@@ -31,6 +31,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Active Provider
+    |--------------------------------------------------------------------------
+    | Set this to the name of a provider defined under 'providers' below to
+    | make the chatbox widget use that provider's api_url, api_token, and
+    | api_model instead of the top-level defaults above.
+    |
+    | Example:
+    |   AI_CHATBOX_ACTIVE_PROVIDER=lmstudio     → uses providers.lmstudio config
+    |   AI_CHATBOX_ACTIVE_PROVIDER=ollama   → uses providers.ollama config
+    */
+
+    'active_provider' => env('AI_CHATBOX_ACTIVE_PROVIDER', 'ollama'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Response Language
     |--------------------------------------------------------------------------
     | The language the AI must always reply in, regardless of what language
@@ -337,6 +352,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Memory Driver
+    |--------------------------------------------------------------------------
+    | Controls where conversation history (chats and messages) is persisted.
+    |
+    | 'session'  — PHP session storage. Zero-config, default.
+    | 'database' — Eloquent models stored in ai_chatbox_conversations /
+    |              ai_chatbox_messages tables. History survives browser sessions
+    |              and is queryable. Run `php artisan migrate` after switching.
+    */
+
+    'memory_driver' => env('AI_CHATBOX_MEMORY_DRIVER', 'session'),
+
+    /*
+    |--------------------------------------------------------------------------
     | RAG Processing Time Limit
     |--------------------------------------------------------------------------
     | Maximum seconds PHP is allowed to spend on a single document upload
@@ -351,5 +380,50 @@ return [
     | requests use the normal PHP max_execution_time.
     */
     'rag_processing_timeout' => (int) env('AI_CHATBOX_RAG_PROCESSING_TIMEOUT', 0),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Named AI Providers
+    |--------------------------------------------------------------------------
+    | Define additional named providers for use with the AI facade:
+    |
+    |   AI::provider('ollama')->chat('Hello');
+    |   AI::provider('openai')->withTemperature(0.2)->chat('Hello');
+    |   AI::chat('Hello');   // uses the 'default' provider (top-level config above)
+    |
+    | Each entry only needs the keys that differ from the global defaults above
+    | (api_url, api_token, api_model). All other settings (temperature,
+    | system_prompt, language, history_limit, etc.) are inherited automatically.
+    |
+    | You can add as many named providers as you like. Custom provider names
+    | (e.g. 'lmstudio', 'mistral', 'azure') are fully supported.
+    */
+
+    'providers' => [
+
+        'lmstudio' => [
+            'api_url' => env('LMSTUDIO_URL', 'http://localhost:1234/v1/chat/completions'),
+            'api_token' => env('LMSTUDIO_TOKEN', 'lmstudio'),
+            'api_model' => env('LMSTUDIO_MODEL', 'local-model'),
+        ],
+
+        'ollama' => [
+            'api_url' => env('OLLAMA_URL', 'http://localhost:11434/v1/chat/completions'),
+            'api_token' => env('OLLAMA_TOKEN', 'your-ollama-token'),
+            'api_model' => env('OLLAMA_MODEL', 'gpt-oss:120b'),
+        ],
+
+        'openai' => [
+            'api_url' => env('OPENAI_URL', ''),
+            'api_token' => env('OPENAI_API_KEY', ''),
+            'api_model' => env('OPENAI_MODEL', ''),
+        ],
+
+        'groq' => [
+            'api_url' => env('GROQ_URL', ''),
+            'api_token' => env('GROQ_API_KEY', ''),
+            'api_model' => env('GROQ_MODEL', ''),
+        ],
+    ],
 
 ];

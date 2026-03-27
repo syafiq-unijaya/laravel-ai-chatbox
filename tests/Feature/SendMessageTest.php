@@ -4,6 +4,7 @@ namespace SyafiqUnijaya\AiChatbox\Tests\Feature;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Response;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use SyafiqUnijaya\AiChatbox\Tests\TestCase;
 
 class SendMessageTest extends TestCase
@@ -318,5 +319,47 @@ class SendMessageTest extends TestCase
         $this->mockGuzzle([$this->openAiResponse('Fine')]);
         // No exception should be thrown; history passed as-is (only message-count limit applies)
         $this->postJson('/ai-chatbox/message', ['message' => 'test'])->assertOk();
+    }
+
+    // ── Database memory driver ────────────────────────────────────────────────
+
+    public function test_database_driver_persists_history_across_requests(): void
+    {
+        $this->useDatabase();
+
+        $threadId = '550e8400-e29b-4d4f-a716-446655440000';
+
+        $this->mockGuzzle([
+            $this->openAiResponse('Reply 1'),
+            $this->openAiResponse('Reply 2'),
+        ]);
+
+        $this->postJson('/ai-chatbox/message', ['message' => 'First',  'thread_id' => $threadId]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'Second', 'thread_id' => $threadId]);
+
+        // History lives in DB, not session
+        $this->assertEmpty(session('ai_chatbox_history'));
+        $this->assertDatabaseCount('ai_chatbox_messages', 4); // 2 pairs
+    }
+
+    public function test_database_driver_history_limit_caps_stored_messages(): void
+    {
+        $this->useDatabase();
+        $this->app['config']->set('ai-chatbox.history_limit', 1); // keep 1 pair max
+
+        $threadId = '550e8400-e29b-4d4f-a716-446655440000';
+
+        $this->mockGuzzle([
+            $this->openAiResponse('Reply 1'),
+            $this->openAiResponse('Reply 2'),
+        ]);
+
+        $this->postJson('/ai-chatbox/message', ['message' => 'First',  'thread_id' => $threadId]);
+        $this->postJson('/ai-chatbox/message', ['message' => 'Second', 'thread_id' => $threadId]);
+
+        // Only the newest 1 pair = 2 messages should remain
+        $this->assertDatabaseCount('ai_chatbox_messages', 2);
+        $this->assertDatabaseHas('ai_chatbox_messages', ['content' => 'Second']);
+        $this->assertDatabaseMissing('ai_chatbox_messages', ['content' => 'First']);
     }
 }

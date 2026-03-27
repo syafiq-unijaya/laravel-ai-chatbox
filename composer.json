@@ -71,7 +71,10 @@
         "laravel": {
             "providers": [
                 "SyafiqUnijaya\\AiChatbox\\AiChatboxServiceProvider"
-            ]
+            ],
+            "aliases": {
+                "AI": "SyafiqUnijaya\\AiChatbox\\AI"
+            }
         }
     },
     "minimum-stability": "stable",

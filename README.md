@@ -20,16 +20,22 @@ Messages are proxied through your Laravel backend to any **OpenAI-compatible API
 - **Four frontend drivers** — Vue 3 (default), vanilla JS (no framework), Livewire + Alpine.js, or API-only (`none`) for React/Svelte/custom builds
 - **Universal AI support** — Ollama (local & cloud), OpenAI, Groq, OpenRouter, LM Studio, or any OpenAI-compatible endpoint
 - **RAG (Retrieval-Augmented Generation)** — upload `.md`/`.txt` documents; the chatbox retrieves relevant context automatically on every message
-- **Admin Knowledge Base UI** — drag-and-drop document manager at `/ai-chatbox/rag` to upload, index, reprocess, and delete documents
+- **Knowledge Base UI** — document manager at `/ai-chatbox/rag` with upload/reprocess loading states, status badges, and error details
+- **Admin Dashboard** — at `/ai-chatbox/admin`; shows RAG stats, memory stats, all config values, named providers, and a live diagnostic panel with errors, warnings, and notices for misconfigured settings
+- **Conversations viewer** — at `/ai-chatbox/admin/conversations`; async-paginated list of all conversation threads with click-to-open message modal showing full chat history in chat-bubble layout
+- **Configuration diagnostics** — the admin dashboard validates every config group at load time: missing tables, insecure settings, SSRF conflicts, chunk size issues, empty API tokens, and more
 - **Real-time token streaming** — AI replies stream token-by-token via Server-Sent Events (SSE) with a blinking cursor
 - **Markdown rendering** — AI replies rendered with `marked.js` + `DOMPurify` (bundled in Vue driver; CDN-loaded in blade/livewire drivers)
 - **Conversation threads** — each conversation gets a unique UUID thread; start a fresh thread any time without losing context of others
+- **AI Provider Facade** — call `AI::provider('openai')->chat($prompt)` or `AI::chat($prompt)` from anywhere in your app; fluent API to switch model, temperature, and system prompt at runtime
+- **Named providers** — configure multiple AI providers (`ollama`, `openai`, `groq`, `lmstudio`) in one config file; each inherits global defaults and only overrides what it needs
+- **Database memory driver** — optionally persist conversation threads and messages in `ai_chatbox_conversations` / `ai_chatbox_messages` tables; history survives PHP session expiry and is queryable
 - **Session memory** — server-side history per thread with configurable turn limit; context is automatically sent back to the AI on every message
 - **Token-based context trimming** — history is trimmed oldest-first by estimated token count to keep requests within your model's context window
 - **Message storage** — chat bubbles persist across page refresh via `localStorage` or `sessionStorage`, scoped per user and per app
 - **Health check** — pings the AI service before opening; shows an offline toast if unreachable
 - **Sound notifications** — Web Audio API ping on AI reply, no audio file needed
-- **Dark mode** — automatic via `prefers-color-scheme`
+- **Dark mode** — `auto` (follows OS), `light`, or `dark`; applies to all admin pages and the Knowledge Base UI
 - **SSRF protection** — blocks requests to private/reserved IPs on the health endpoint
 - **CORS middleware** — restricts chatbox routes to your own origin
 - **Rate limiting** — configurable per-IP throttle on all endpoints
@@ -195,10 +201,11 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `ssrf_protection` | `AI_CHATBOX_SSRF_PROTECTION` | `true` | Block requests to private/reserved IPs |
 | `allowed_origins` | — | `[env('APP_URL')]` | Origins permitted to call chatbox endpoints (CORS) |
 
-### Storage
+### Memory & Storage
 
 | Key | `.env` variable | Default | Description |
 |---|---|---|---|
+| `memory_driver` | `AI_CHATBOX_MEMORY_DRIVER` | `session` | Server-side history driver — `session` (PHP session) or `database` (Eloquent, survives session expiry) |
 | `storage` | `AI_CHATBOX_STORAGE` | `local` | Browser storage — `local` (persists across sessions) or `session` (clears on tab close) |
 
 ### Widget Appearance
@@ -209,7 +216,7 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `title` | `AI_CHATBOX_TITLE` | `AI Assistant` | Header title |
 | `placeholder` | — | `Type your message...` | Input placeholder text |
 | `theme_color` | — | `#4f46e5` | Primary colour (CSS variable) |
-| `color_scheme` | `AI_CHATBOX_COLOR_SCHEME` | `auto` | Color scheme for the RAG admin UI — `auto` (follows OS), `light`, or `dark` |
+| `color_scheme` | `AI_CHATBOX_COLOR_SCHEME` | `auto` | Color scheme for all admin pages — `auto` (follows OS), `light`, or `dark` |
 | `position` | `AI_CHATBOX_POSITION` | `bottom-right` | Widget position — `bottom-right`, `bottom-left`, `top-right`, `top-left` |
 | `greeting` | `AI_CHATBOX_GREETING` | `Hi! How can I help you today?` | Opening message on first open — leave empty to disable |
 
@@ -235,7 +242,32 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 | `rag_similarity_threshold` | `AI_CHATBOX_RAG_THRESHOLD` | `0.2` | Minimum cosine similarity score `0.0`–`1.0` |
 | `rag_context_prompt` | `AI_CHATBOX_RAG_CONTEXT_PROMPT` | *(see below)* | Instruction prepended to retrieved chunks — use `{chunks}` as placeholder |
 | `rag_processing_timeout` | `AI_CHATBOX_RAG_PROCESSING_TIMEOUT` | `0` | Max seconds for a single upload/reprocess — `0` = no limit (recommended for local models) |
-| `rag_admin_middleware` | — | `['web', 'auth']` | Middleware for the RAG admin UI (publish config to change) |
+| `rag_admin_middleware` | — | `['web', 'auth']` | Middleware for all admin and Knowledge Base pages (publish config to change — add a role/permission middleware for tighter access control) |
+
+### Named Providers
+
+Named providers are configured under the `providers` key. Each entry only needs the keys that differ from the global defaults above — all other settings (`temperature`, `system_prompt`, `language`, etc.) are inherited automatically.
+
+```php
+// config/ai-chatbox.php
+'providers' => [
+    'ollama'   => ['api_url' => env('OLLAMA_URL', '...'), 'api_token' => env('OLLAMA_TOKEN', 'ollama'),   'api_model' => env('OLLAMA_MODEL', 'phi3:mini')],
+    'openai'   => ['api_url' => env('OPENAI_URL', '...'), 'api_token' => env('OPENAI_API_KEY', ''),       'api_model' => env('OPENAI_MODEL', 'gpt-4o')],
+    'groq'     => ['api_url' => env('GROQ_URL',   '...'), 'api_token' => env('GROQ_API_KEY', ''),         'api_model' => env('GROQ_MODEL', 'llama-3.3-70b-versatile')],
+    'lmstudio' => ['api_url' => env('LMSTUDIO_URL','...'), 'api_token' => env('LMSTUDIO_TOKEN','lmstudio'),'api_model' => env('LMSTUDIO_MODEL','local-model')],
+],
+```
+
+The corresponding `.env` keys for each built-in named provider:
+
+| Provider | URL variable | Token variable | Model variable |
+|---|---|---|---|
+| `ollama` | `OLLAMA_URL` | `OLLAMA_TOKEN` | `OLLAMA_MODEL` |
+| `openai` | `OPENAI_URL` | `OPENAI_API_KEY` | `OPENAI_MODEL` |
+| `groq` | `GROQ_URL` | `GROQ_API_KEY` | `GROQ_MODEL` |
+| `lmstudio` | `LMSTUDIO_URL` | `LMSTUDIO_TOKEN` | `LMSTUDIO_MODEL` |
+
+> **Note:** These are distinct from the `AI_CHATBOX_*` variables used by the chatbox widget. `AI_CHATBOX_API_URL` controls the widget; `OLLAMA_URL`/`OPENAI_API_KEY`/etc. control the named facade providers.
 
 ---
 
@@ -244,18 +276,23 @@ Publish and edit `config/ai-chatbox.php` to customise all options.
 The package registers the following routes under the configured prefix:
 
 ```
-GET    /ai-chatbox/health              Ping the AI service (health check)
-POST   /ai-chatbox/message             Send a message, receive a full JSON reply
-POST   /ai-chatbox/stream              Send a message, stream SSE token-by-token reply
-POST   /ai-chatbox/clear               Clear server-side session history for a thread
+GET    /ai-chatbox/health                           Ping the AI service (health check)
+POST   /ai-chatbox/message                          Send a message, receive a full JSON reply
+POST   /ai-chatbox/stream                           Send a message, stream SSE token-by-token reply
+POST   /ai-chatbox/clear                            Clear server-side session history for a thread
 
-GET    /ai-chatbox/rag                 RAG admin — list indexed documents      [auth]
-POST   /ai-chatbox/rag                 RAG admin — upload and index a document [auth]
-DELETE /ai-chatbox/rag/{id}            RAG admin — delete a document           [auth]
-POST   /ai-chatbox/rag/{id}/reprocess  RAG admin — re-chunk and re-embed       [auth]
+GET    /ai-chatbox/rag                              Knowledge Base — list indexed documents      [auth]
+POST   /ai-chatbox/rag                              Knowledge Base — upload and index a document [auth]
+DELETE /ai-chatbox/rag/{id}                         Knowledge Base — delete a document           [auth]
+POST   /ai-chatbox/rag/{id}/reprocess               Knowledge Base — re-chunk and re-embed       [auth]
+
+GET    /ai-chatbox/admin                            Admin dashboard                              [auth]
+GET    /ai-chatbox/admin/conversations              Conversations list                           [auth]
+GET    /ai-chatbox/admin/conversations/data         Conversations JSON (paginated)               [auth]
+GET    /ai-chatbox/admin/conversations/{id}/messages  Messages for a conversation (JSON)         [auth]
 ```
 
-> RAG admin routes require an authenticated user by default (`rag_admin_middleware`). Publish the config to change this.
+> Admin and Knowledge Base routes require an authenticated user by default (`rag_admin_middleware`). Publish the config to customise — see [Protecting the admin UI](#protecting-the-admin-ui).
 
 ---
 
@@ -425,6 +462,75 @@ AI_CHATBOX_SSRF_PROTECTION=false
 ```
 
 > Start LM Studio, load a model, and enable the **Local Server** tab. The model name must match exactly what LM Studio displays (e.g. `lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF`).
+
+---
+
+## AI Provider Facade
+
+The `AI` facade lets you call AI providers directly from your PHP code — controllers, jobs, commands, or services — without touching `.env` or the chatbox widget.
+
+### Basic usage
+
+```php
+use SyafiqUnijaya\AiChatbox\AI;
+
+// Use the default provider (AI_CHATBOX_* env vars)
+$reply = AI::chat('Summarise this document: ...');
+
+// Use a named provider
+$reply = AI::provider('openai')->chat('Translate to French: ...');
+$reply = AI::provider('groq')->chat('Write a test for this function...');
+$reply = AI::provider('ollama')->chat('What is the capital of France?');
+```
+
+### Fluent modifiers
+
+Each modifier returns a **new immutable instance** — the original is never changed.
+
+```php
+$reply = AI::provider('openai')
+    ->withModel('gpt-4o-mini')
+    ->withTemperature(0.2)
+    ->withSystemPrompt('You are a JSON-only responder. Return only valid JSON.')
+    ->withMaxTokens(512)
+    ->withTimeout(60)
+    ->chat($prompt);
+```
+
+| Method | Description |
+|---|---|
+| `->withModel(string $model)` | Override the model for this call |
+| `->withSystemPrompt(string $prompt)` | Override the system prompt |
+| `->withLanguage(string $lang)` | Override the reply language |
+| `->withTemperature(float $temp)` | Override creativity (`0.0`–`1.0`) |
+| `->withMaxTokens(?int $tokens)` | Override max reply length (`null` = model default) |
+| `->withTimeout(int $seconds)` | Override the HTTP timeout |
+| `->withConfig(array $overrides)` | Merge arbitrary config overrides |
+
+### Streaming via facade
+
+```php
+// With a callback (synchronous)
+AI::provider('openai')->stream($prompt, [], function (string $token) {
+    echo $token;
+    ob_flush(); flush();
+});
+
+// Without a callback — returns a Closure you invoke later
+$reader = AI::provider('default')->stream($prompt);
+$reader(fn(string $token) => print($token));
+```
+
+### Env vars — widget vs. facade
+
+The chatbox widget and the facade providers use separate env vars:
+
+| Purpose | Env variables |
+|---|---|
+| **Chatbox widget** (default) | `AI_CHATBOX_API_URL`, `AI_CHATBOX_API_TOKEN`, `AI_CHATBOX_API_MODEL` |
+| **Named facade providers** | `OLLAMA_URL`/`OLLAMA_TOKEN`/`OLLAMA_MODEL`, `OPENAI_URL`/`OPENAI_API_KEY`/`OPENAI_MODEL`, etc. |
+
+`AI::chat()` and `AI::provider('default')` both use the `AI_CHATBOX_*` widget config. `AI::provider('openai')` uses the `OPENAI_*` keys.
 
 ---
 
@@ -657,17 +763,41 @@ Maximum upload size: **10 MB** per file.
 
 ---
 
-### Admin Knowledge Base UI
+### Admin Dashboard
+
+Visit **`/ai-chatbox/admin`** (authenticated users only) to see:
+
+- **Stat cards** — RAG document/chunk counts, conversation and message counts (database driver)
+- **Configuration diagnostics** — a live panel that checks every config group and reports errors (red), warnings (amber), and notices (blue) at page load. All checks pass → a green "All configuration checks passed" banner is shown.
+- **All config values** — grouped by section (AI API, Response, Streaming, Widget, Security, RAG, Memory) with their resolved values
+- **Named providers** — shows all configured named providers and their settings
+- **Environment** — Laravel, PHP, app env, and debug mode
+
+Diagnostic checks include: missing API URL/token/model, placeholder tokens, APP_DEBUG in production, SSRF conflicts with local URLs, open CORS origins, missing database tables, invalid RAG chunk settings, failed/un-embedded documents, weak admin middleware, frontend driver not installed, and more.
+
+---
+
+### Knowledge Base UI
 
 Visit **`/ai-chatbox/rag`** in your browser (authenticated users only).
 
 | Action | Description |
 |---|---|
-| **Upload** | Select a `.md` or `.txt` file, optionally set a display title, click *Upload & Index* |
-| **Reprocess** | Re-chunk and re-embed an existing document (e.g. after changing chunk size settings) |
-| **Delete** | Remove the document and all its chunks permanently |
+| **Upload** | Select a `.md` or `.txt` file, optionally set a display title, click *Upload & Index* — a full-page overlay with spinner shows while the file is being processed |
+| **Reprocess** | Re-chunk and re-embed an existing document (e.g. after changing chunk size or embedding URL) — the row shows a spinning badge while processing |
+| **Delete** | Remove the document and all its chunks permanently (confirmation required) |
 
-The page shows each document's indexing status (`Pending` → `Processing` → `Ready` / `Failed`), chunk count, and the error message if embedding failed.
+The page shows each document's indexing status (`Pending` → `Processing` → `Ready` / `Failed`), chunk count, and an expandable error message if embedding failed.
+
+---
+
+### Conversations Viewer
+
+Visit **`/ai-chatbox/admin/conversations`** (or click the Conversations card on the admin dashboard) to browse all recorded conversations (requires `memory_driver=database`).
+
+- **Async-paginated table** — loads conversation rows via JSON without full page reloads; shows thread ID, user name (resolved from the User model), message count, last message preview, and last active time
+- **Click a row** to open a modal showing the full message history in a chat-bubble layout (user messages on the right, assistant on the left)
+- **Guest sessions** — rows and modal labels show "Guest" when no user is associated
 
 ---
 
@@ -711,13 +841,15 @@ Leave `{chunks}` in the prompt — the retrieved text is inserted there. If `{ch
 
 ### Protecting the admin UI
 
-By default `rag_admin_middleware` is `['web', 'auth']`, which requires an authenticated Laravel user. To customise, publish the config and edit the array:
+By default `rag_admin_middleware` is `['web', 'auth']`, which requires an authenticated Laravel user. This applies to all admin pages (`/ai-chatbox/admin`, `/ai-chatbox/admin/conversations`, and `/ai-chatbox/rag`).
+
+The admin dashboard will show a warning if only the default `[web, auth]` middleware is in use, because any authenticated user can then access it. Add a role or permission middleware for production:
 
 ```php
 // config/ai-chatbox.php
-'rag_admin_middleware' => ['web', 'auth:sanctum'],
-// or restrict to admins:
-'rag_admin_middleware' => ['web', 'auth', 'can:manage-ai-knowledge'],
+'rag_admin_middleware' => ['web', 'auth', 'role:admin'],           // Spatie roles
+'rag_admin_middleware' => ['web', 'auth', 'can:manage-chatbox'],   // Laravel Gates
+'rag_admin_middleware' => ['web', 'auth:sanctum'],                 // Sanctum
 ```
 
 ---
@@ -779,6 +911,43 @@ AI_CHATBOX_STORAGE=session
 
 ---
 
+## Database Memory Driver
+
+By default, server-side conversation history is kept in the PHP session and expires when the session ends. Switch to the `database` driver to persist history in Eloquent models instead:
+
+```env
+AI_CHATBOX_MEMORY_DRIVER=database
+```
+
+**Run the migration** (if you haven't already):
+
+```bash
+php artisan migrate
+```
+
+This creates two tables:
+
+| Table | Purpose |
+|---|---|
+| `ai_chatbox_conversations` | One row per conversation thread (keyed by UUID) |
+| `ai_chatbox_messages` | All messages for each thread (role + content) |
+
+**When to use it:**
+
+- History needs to survive PHP session expiry or server restarts
+- You want to query, audit, or export conversation logs
+- You run multiple PHP workers and need history shared across all of them
+
+**Switching back:**
+
+```env
+AI_CHATBOX_MEMORY_DRIVER=session
+```
+
+Existing database records are not deleted — they are simply ignored until you switch back.
+
+---
+
 ## Markdown Rendering
 
 AI replies are rendered as Markdown by default using [marked.js](https://marked.js.org/) and [DOMPurify](https://github.com/cure53/DOMPurify). Availability depends on the frontend driver:
@@ -812,9 +981,9 @@ AI_CHATBOX_MARKDOWN=false
 
 The widget automatically adapts to the user's OS/browser dark mode preference via `prefers-color-scheme: dark`. No configuration required.
 
-### RAG admin UI
+### Admin pages
 
-The RAG admin page (`/ai-chatbox/rag`) supports three modes, controlled by `color_scheme`:
+All admin pages — `/ai-chatbox/admin`, `/ai-chatbox/admin/conversations`, and `/ai-chatbox/rag` — share the same `color_scheme` setting:
 
 | Value | Behaviour |
 |---|---|
@@ -827,6 +996,8 @@ AI_CHATBOX_COLOR_SCHEME=auto    # OS preference (default)
 AI_CHATBOX_COLOR_SCHEME=light   # force light
 AI_CHATBOX_COLOR_SCHEME=dark    # force dark
 ```
+
+> Run `php artisan config:clear` after changing `.env` values for them to take effect.
 
 ---
 
@@ -857,19 +1028,22 @@ The package ships four frontend implementations that share the same backend API 
 ```
 src/resources/
 ├── views/
-│   ├── chatbox.blade.php          # Dispatcher — routes to active driver
-│   ├── chatbox-config.blade.php   # window.AiChatboxConfig (shared)
-│   ├── chatbox-vue.blade.php      # Vue 3 driver
-│   ├── chatbox-blade.blade.php    # Vanilla JS driver
+│   ├── chatbox.blade.php             # Dispatcher — routes to active driver
+│   ├── chatbox-config.blade.php      # window.AiChatboxConfig (shared)
+│   ├── chatbox-vue.blade.php         # Vue 3 driver
+│   ├── chatbox-blade.blade.php       # Vanilla JS driver
+│   ├── admin.blade.php               # Admin dashboard (/ai-chatbox/admin)
+│   ├── admin-conversations.blade.php # Conversations viewer (/ai-chatbox/admin/conversations)
+│   ├── rag.blade.php                 # Knowledge Base UI (/ai-chatbox/rag)
 │   └── livewire/
-│       └── chatbox.blade.php      # Livewire + Alpine.js driver
+│       └── chatbox.blade.php         # Livewire + Alpine.js driver
 ├── js/
-│   ├── app.js                     # Vite entry — mounts Vue to #ai-chatbox-app
+│   ├── app.js                        # Vite entry — mounts Vue to #ai-chatbox-app
 │   └── components/
-│       └── AiChatbox.vue          # Vue SFC (template + logic + scoped CSS)
+│       └── AiChatbox.vue             # Vue SFC (template + logic + scoped CSS)
 └── assets/
-    ├── css/chatbox.css            # Compiled — shared by all drivers
-    └── js/chatbox.js              # Compiled Vue bundle (vue driver only)
+    ├── css/chatbox.css               # Compiled — shared by all drivers
+    └── js/chatbox.js                 # Compiled Vue bundle (vue driver only)
 ```
 
 The compiled assets (`chatbox.css` + `chatbox.js`) are pre-built and committed to the repository — your Laravel application requires no Node.js tooling at runtime.
@@ -904,7 +1078,7 @@ If the chatbox shows an offline toast or requests fail, check `storage/logs/lara
 composer test
 ```
 
-The test suite covers all backend behaviour — controller responses, error classification, session history, conversation thread isolation, token-based context trimming, SSE streaming, RAG document upload/delete/reprocess, RAG context injection into chat, CORS middleware, SSRF protection, and health check logic — using PHPUnit 11 and Orchestra Testbench.
+The test suite covers all backend behaviour — controller responses, error classification, session history, conversation thread isolation, token-based context trimming, SSE streaming, RAG document upload/delete/reprocess, RAG context injection into chat, CORS middleware, SSRF protection, health check logic, `AiManager` named provider resolution, `AiProvider` fluent modifiers and immutability, and the `AI` facade — using PHPUnit 11 and Orchestra Testbench.
 
 ---
 

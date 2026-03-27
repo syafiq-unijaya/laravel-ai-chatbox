@@ -10,9 +10,7 @@ return new class extends Migration
     {
         Schema::create('ai_chatbox_rag_chunks', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('document_id')
-                ->constrained('ai_chatbox_rag_documents')
-                ->cascadeOnDelete();
+            $table->foreignId('document_id')->constrained('ai_chatbox_rag_documents')->cascadeOnDelete();
             $table->unsignedInteger('chunk_index');
             $table->text('content');
             $table->longText('embedding')->nullable(); // JSON float array

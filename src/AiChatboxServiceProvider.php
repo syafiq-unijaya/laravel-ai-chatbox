@@ -2,17 +2,21 @@
 namespace SyafiqUnijaya\AiChatbox;
 
 use GuzzleHttp\Client;
+use Illuminate\Foundation\AliasLoader;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use SyafiqUnijaya\AiChatbox\Engine\Contracts\AiEngineInterface;
+use SyafiqUnijaya\AiChatbox\Engine\OpenAiCompatibleEngine;
 use SyafiqUnijaya\AiChatbox\Http\Middleware\CorsMiddleware;
+use SyafiqUnijaya\AiChatbox\Memory\Contracts\ConversationRepositoryInterface;
+use SyafiqUnijaya\AiChatbox\Memory\DatabaseConversationRepository;
+use SyafiqUnijaya\AiChatbox\Memory\SessionConversationRepository;
 
 class AiChatboxServiceProvider extends ServiceProvider
 {
-    public const VERSION = '1.5.0';
-
     public function register(): void
     {
         $this->mergeConfigFrom(
@@ -23,6 +27,24 @@ class AiChatboxServiceProvider extends ServiceProvider
         // Bind a Guzzle client factory so tests can swap it with a mock handler
         $this->app->bind('ai-chatbox.guzzle', function () {
             return fn(array $config = []) => new Client($config);
+        });
+
+        // Layer 1 — AI Engine
+        $this->app->bind(AiEngineInterface::class, OpenAiCompatibleEngine::class);
+
+        // Layer 2 — Memory (driver resolved lazily from config at first use)
+        $this->app->bind(ConversationRepositoryInterface::class, function () {
+            return config('ai-chatbox.memory_driver') === 'database'
+            ? new DatabaseConversationRepository()
+            : new SessionConversationRepository();
+        });
+
+        // Provider abstraction — AI::provider('ollama')->chat(...)
+        $this->app->singleton(AiManager::class);
+
+        // Register the 'AI' alias so it can be used without the full namespace
+        $this->app->booting(function () {
+            AliasLoader::getInstance()->alias('AI', AI::class);
         });
     }
 
@@ -37,7 +59,7 @@ class AiChatboxServiceProvider extends ServiceProvider
 
         // Compute once at boot — app.url never changes at runtime
         View::share('aiChatboxAppHash', substr(md5(config('app.url', 'default')), 0, 8));
-        View::share('aiChatboxVersion', self::VERSION);
+        View::share('aiChatboxVersion', config('app.version', ''));
 
         $this->registerRoutes();
         $this->registerPublishing();
@@ -57,6 +79,11 @@ class AiChatboxServiceProvider extends ServiceProvider
         // RAG admin routes (auth protected, no CORS/throttle needed)
         Route::group($this->ragRouteConfiguration(), function () {
             $this->loadRoutesFrom(__DIR__ . '/../routes/rag.php');
+        });
+
+        // Admin dashboard routes (same middleware as RAG admin)
+        Route::group($this->adminRouteConfiguration(), function () {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/admin.php');
         });
     }
 
@@ -81,6 +108,14 @@ class AiChatboxServiceProvider extends ServiceProvider
     {
         return [
             'prefix' => config('ai-chatbox.route_prefix') . '/rag',
+            'middleware' => config('ai-chatbox.rag_admin_middleware', ['web', 'auth']),
+        ];
+    }
+
+    protected function adminRouteConfiguration(): array
+    {
+        return [
+            'prefix' => config('ai-chatbox.route_prefix') . '/admin',
             'middleware' => config('ai-chatbox.rag_admin_middleware', ['web', 'auth']),
         ];
     }

@@ -36,9 +36,27 @@ abstract class TestCase extends Orchestra
         $app['config']->set('ai-chatbox.ssrf_protection', false);
         $app['config']->set('ai-chatbox.allowed_origins', ['http://localhost']);
         $app['config']->set('ai-chatbox.offline_message', 'AI service is currently unreachable.');
+        $app['config']->set('ai-chatbox.memory_driver', 'session');
         $app['config']->set('ai-chatbox.rag_enabled', false);
         $app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
         $app['config']->set('ai-chatbox.rag_embedding_model', 'test-embed');
+    }
+
+    /**
+     * Switch to the database memory driver and run migrations.
+     * Call at the top of any test that needs DB-backed conversation history.
+     */
+    protected function useDatabase(): void
+    {
+        $this->app['config']->set('ai-chatbox.memory_driver', 'database');
+
+        // Re-bind the repository now that the config key has changed
+        $this->app->bind(
+            \SyafiqUnijaya\AiChatbox\Memory\Contracts\ConversationRepositoryInterface::class,
+            \SyafiqUnijaya\AiChatbox\Memory\DatabaseConversationRepository::class
+        );
+
+        $this->artisan('migrate');
     }
 
     protected function setUp(): void

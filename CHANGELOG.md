@@ -8,7 +8,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **3-layer architecture** — the package is now organized into three explicit layers:
+  - **Layer 1 — AI Engine** (`src/Engine/`): `AiEngineInterface`, `OpenAiCompatibleEngine`, `PromptBuilder`, `HealthChecker`, `AiEngineException`. All HTTP calls, prompt assembly, error classification, and health checks live here.
+  - **Layer 2 — Memory** (`src/Memory/`): `ConversationRepositoryInterface`, `SessionConversationRepository`, `DatabaseConversationRepository`, `ContextManager`, `Conversation` model, `Message` model. All history persistence and context trimming live here.
+  - **Layer 3 — UI** (`src/Http/Controllers/`, `src/resources/`): `ChatboxController` now only handles HTTP request/response and delegates entirely to Layers 1 and 2.
+- **Database memory driver** — new `memory_driver` config key (`AI_CHATBOX_MEMORY_DRIVER`, default `session`). Set to `database` to persist conversation history in the `ai_chatbox_conversations` / `ai_chatbox_messages` tables; history then survives browser sessions and is queryable via Eloquent.
+- **New migrations**: `ai_chatbox_conversations` (thread_id, user_id) and `ai_chatbox_messages` (conversation_id, role, content) — auto-loaded when `memory_driver=database`.
+- **`AiEngineInterface`** — public contract for the AI engine; implement it to add a custom provider (e.g. Anthropic, Gemini, Cohere) and bind it in the service provider.
+- **`ConversationRepositoryInterface`** — public contract for the memory layer; implement it to add a custom storage backend (e.g. Redis, MongoDB).
+- **`beginStream()`** on the engine — establishes the AI HTTP connection before `response()->stream()` starts, so network errors still return a proper JSON error response (non-200) rather than a corrupted stream.
+
 ### Changed
+- `ChatboxController` reduced from ~600 lines to ~120 lines — pure HTTP I/O, no business logic
+- Error classification (`E01`–`E19`) moved from `ChatboxController` to `OpenAiCompatibleEngine` (now `public` methods, directly testable)
+- `ErrorClassificationTest` updated to target `OpenAiCompatibleEngine` directly (no more reflection into the controller)
 - Expanded `composer.json` keywords for better Packagist discoverability (added `rag`, `retrieval-augmented-generation`, `embeddings`, `vector-search`, `streaming`, `sse`, `vue3`, `local-ai`, `ai-assistant`, and more)
 - Updated package description in `composer.json` to reflect RAG and streaming capabilities
 

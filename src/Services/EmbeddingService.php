@@ -58,6 +58,7 @@ class EmbeddingService
             }
 
             Log::warning('AI Chatbox RAG: Embedding API returned an unrecognised format.', [
+                'url' => $url,
                 'keys' => array_keys($data ?? []),
             ]);
 
@@ -65,6 +66,8 @@ class EmbeddingService
 
         } catch (\Throwable $e) {
             Log::error('AI Chatbox RAG: Embedding API call failed.', [
+                'url' => $url,
+                'model' => $model,
                 'error' => $e->getMessage(),
             ]);
             return null;
