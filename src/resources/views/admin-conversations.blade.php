@@ -127,7 +127,7 @@
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased min-h-screen">
 
-<div class="max-w-6xl mx-auto px-4 py-10">
+<div class="w-full px-6 py-10">
 
     {{-- ── Header ──────────────────────────────────────────────────────────── --}}
     <div class="flex items-center justify-between mb-8 gap-4 flex-wrap">

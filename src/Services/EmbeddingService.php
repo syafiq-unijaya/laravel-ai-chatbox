@@ -15,7 +15,7 @@ class EmbeddingService
         private readonly ?string $url = null,
         private readonly ?string $model = null,
         private readonly ?string $token = null,
-        private readonly ?int    $timeout = null,
+        private readonly ?int $timeout = null,
     ) {}
 
     /**
@@ -29,9 +29,9 @@ class EmbeddingService
      */
     public function embed(string $text): ?array
     {
-        $url     = $this->url     ?? config('ai-chatbox.rag_embedding_url', '');
-        $model   = $this->model   ?? config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
-        $token   = $this->token   ?? config('ai-chatbox.api_token', '');
+        $url = $this->url ?? config('ai-chatbox.rag_embedding_url', '');
+        $model = $this->model ?? config('ai-chatbox.rag_embedding_model', 'nomic-embed-text');
+        $token = $this->token ?? config('ai-chatbox.api_token', '');
         $timeout = $this->timeout ?? (int) config('ai-chatbox.rag_embedding_timeout', 10);
 
         if (empty($url)) {

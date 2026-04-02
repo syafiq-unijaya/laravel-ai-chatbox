@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\View\View;
+use SyafiqUnijaya\AiChatbox\AiManager;
 use SyafiqUnijaya\AiChatbox\Memory\Models\Conversation;
 use SyafiqUnijaya\AiChatbox\Memory\Models\Message;
 use SyafiqUnijaya\AiChatbox\Models\RagChunk;
@@ -13,6 +14,11 @@ use SyafiqUnijaya\AiChatbox\Models\RagDocument;
 
 class AdminController extends Controller
 {
+    public function __construct(private readonly AiManager $aiManager)
+    {
+
+    }
+
     public function index(): View
     {
         $ragEnabled = (bool) config('ai-chatbox.rag_enabled');
@@ -45,16 +51,26 @@ class AdminController extends Controller
         }
 
         // ── Config groups ─────────────────────────────────────────────────────
-        $cfg = config('ai-chatbox', []);
+        // Use the resolved effective config so api_url/token/model come from
+        // the active provider, not empty top-level placeholders.
+        // Fall back to raw base config if the active provider is misconfigured
+        // so the admin page can still render and show the diagnostic error.
+        try {
+            $cfg = $this->aiManager->resolveConfig(
+                config('ai-chatbox.active_provider', 'default')
+            );
+        } catch (\InvalidArgumentException) {
+            $cfg = config('ai-chatbox', []);
+        }
 
         $configGroups = [
             'AI API' => [
-                'active_provider'     => $cfg['active_provider'] ?? 'default',
-                'api_url'             => $cfg['api_url'] ?? null,
-                'api_token'           => $cfg['api_token'] ?? null,
-                'api_model'           => $cfg['api_model'] ?? null,
-                'timeout'             => $cfg['timeout'] ?? null,
-                'rag_embedding_url'   => $cfg['rag_embedding_url'] ?? null,
+                'active_provider' => $cfg['active_provider'] ?? 'default',
+                'api_url' => $cfg['api_url'] ?? null,
+                'api_token' => $cfg['api_token'] ?? null,
+                'api_model' => $cfg['api_model'] ?? null,
+                'timeout' => $cfg['timeout'] ?? null,
+                'rag_embedding_url' => $cfg['rag_embedding_url'] ?? null,
                 'rag_embedding_model' => $cfg['rag_embedding_model'] ?? null,
             ],
             'Response' => [
@@ -113,83 +129,107 @@ class AdminController extends Controller
         // Each item: ['level' => 'error'|'warning'|'info', 'group' => string, 'message' => string]
         $diagnostics = [];
 
-        // — AI API —
-        $apiUrl = $cfg['api_url'] ?? '';
-        if (empty($apiUrl)) {
-            $diagnostics[] = ['level' => 'error', 'group' => 'AI API', 'message' => 'api_url (AI_CHATBOX_API_URL) is not set. The chatbox cannot connect to any AI provider.'];
+        // ── Active provider completeness ──────────────────────────────────────
+        // $cfg is the resolved effective config — api_url/token/model come from
+        // the active provider. Validate every required field is properly set.
+        $activeProvider = config('ai-chatbox.active_provider', 'default');
+        $allProviders   = config('ai-chatbox.providers', []);
+
+        // Mirror AiManager: 'default' and '' both map to the first configured provider
+        if ($activeProvider === 'default' || $activeProvider === '') {
+            $activeProvider = (string) array_key_first($allProviders);
+        }
+
+        // Known placeholder/default values that signal the field was never set
+        $tokenPlaceholders = [
+            'your-api-key', 'your-api-token', 'sk-xxx', 'changeme', 'secret',
+            'your-ollama-token', 'your-token', 'placeholder', 'token',
+        ];
+        $urlPlaceholders = ['your-url', 'http://your-host', 'https://your-host'];
+
+        if (!array_key_exists($activeProvider, $allProviders)) {
+            $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                "active_provider is set to \"{$activeProvider}\" but no such provider is defined under 'providers' in the config. "
+                . "The chatbox will throw an exception on every request."];
         } else {
-            $parsedHost = parse_url($apiUrl, PHP_URL_HOST);
-            $isLocalUrl = in_array($parsedHost, ['localhost', '127.0.0.1', '::1'])
-            || str_starts_with($parsedHost ?? '', '192.168.')
-            || str_starts_with($parsedHost ?? '', '10.')
-            || str_starts_with($parsedHost ?? '', '172.');
-            if ($isLocalUrl && config('app.env') === 'production') {
-                $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => "api_url points to a local/private address ({$parsedHost}) in a production environment. Ensure your AI service is reachable from the production server."];
-            }
-            if ($isLocalUrl && ($cfg['ssrf_protection'] ?? true)) {
-                $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => "api_url points to a local address ({$parsedHost}) but ssrf_protection is enabled. Health-check pings to this URL will be blocked. Set AI_CHATBOX_SSRF_PROTECTION=false for local AI services."];
-            }
-        }
-        $apiToken = $cfg['api_token'] ?? '';
-        if (empty($apiToken)) {
-            $diagnostics[] = ['level' => 'error', 'group' => 'AI API', 'message' => 'api_token (AI_CHATBOX_API_TOKEN) is not set. All API requests will be rejected.'];
-        } elseif (in_array(strtolower($apiToken), ['your-api-key', 'your-api-token', 'sk-xxx', 'changeme', 'secret'])) {
-            $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => 'api_token looks like a placeholder value. Make sure you have set a real API token.'];
-        }
-        if (empty($cfg['api_model'])) {
-            $diagnostics[] = ['level' => 'error', 'group' => 'AI API', 'message' => 'api_model (AI_CHATBOX_MODEL) is not set. The AI provider won\'t know which model to use.'];
-        }
-
-        // — Active provider —
-        $activeProvider = $cfg['active_provider'] ?? 'default';
-        if (!empty($activeProvider) && $activeProvider !== 'default') {
-            $providers = $cfg['providers'] ?? [];
-            if (!array_key_exists($activeProvider, $providers)) {
-                $diagnostics[] = ['level' => 'error', 'group' => 'AI API', 'message' => "active_provider is set to \"{$activeProvider}\" but no such provider is defined under 'providers' in the config. The chatbox will throw an exception on every request."];
+            // — api_url —
+            $apiUrl = $cfg['api_url'] ?? '';
+            if (empty($apiUrl)) {
+                $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                    "Provider \"{$activeProvider}\" has no api_url set. Configure its URL env var (e.g. OLLAMA_URL, OPENAI_URL)."];
+            } elseif (in_array(strtolower($apiUrl), $urlPlaceholders) || !filter_var($apiUrl, FILTER_VALIDATE_URL)) {
+                $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                    "Provider \"{$activeProvider}\" api_url \"{$apiUrl}\" is not a valid URL. Fix its URL env var (e.g. OLLAMA_URL, OPENAI_URL)."];
             } else {
-                $ap = $providers[$activeProvider];
-                if (empty($ap['api_url'])) {
-                    $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => "Active provider \"{$activeProvider}\" has no api_url set — it will inherit the top-level AI_CHATBOX_API_URL."];
+                $parsedHost = parse_url($apiUrl, PHP_URL_HOST) ?? '';
+                $isLocalUrl = in_array($parsedHost, ['localhost', '127.0.0.1', '::1'])
+                || str_starts_with($parsedHost, '192.168.')
+                || str_starts_with($parsedHost, '10.')
+                || str_starts_with($parsedHost, '172.');
+                if ($isLocalUrl && config('app.env') === 'production') {
+                    $diagnostics[] = ['level' => 'warning', 'group' => 'Active Provider', 'message' =>
+                        "Provider \"{$activeProvider}\" api_url points to a local/private address ({$parsedHost}) in a production environment. "
+                        . "Ensure your AI service is reachable from the production server."];
                 }
-                if (empty($ap['api_token'])) {
-                    $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => "Active provider \"{$activeProvider}\" has no api_token set — it will inherit the top-level AI_CHATBOX_API_TOKEN."];
+                if ($isLocalUrl && ($cfg['ssrf_protection'] ?? true)) {
+                    $diagnostics[] = ['level' => 'warning', 'group' => 'Active Provider', 'message' =>
+                        "Provider \"{$activeProvider}\" api_url points to a local address ({$parsedHost}) but ssrf_protection is enabled. "
+                        . "Health-check pings will be blocked. Set AI_CHATBOX_SSRF_PROTECTION=false for local AI services."];
                 }
-                if (empty($ap['api_model'])) {
-                    $diagnostics[] = ['level' => 'warning', 'group' => 'AI API', 'message' => "Active provider \"{$activeProvider}\" has no api_model set — it will inherit the top-level AI_CHATBOX_API_MODEL."];
-                }
+            }
+
+            // — api_token —
+            $apiToken = $cfg['api_token'] ?? '';
+            if (empty($apiToken)) {
+                $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                    "Provider \"{$activeProvider}\" has no api_token set. Configure its token env var (e.g. OLLAMA_TOKEN, OPENAI_API_KEY)."];
+            } elseif (in_array(strtolower($apiToken), $tokenPlaceholders)) {
+                $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                    "Provider \"{$activeProvider}\" api_token \"{$apiToken}\" looks like a placeholder. Set a real token via its env var (e.g. OLLAMA_TOKEN, OPENAI_API_KEY)."];
+            }
+
+            // — api_model —
+            if (empty($cfg['api_model'])) {
+                $diagnostics[] = ['level' => 'error', 'group' => 'Active Provider', 'message' =>
+                    "Provider \"{$activeProvider}\" has no api_model set. Configure its model env var (e.g. OLLAMA_MODEL, OPENAI_MODEL)."];
             }
         }
 
-                                                     // — Named providers —
-                                                     // Named providers are optional — only warn if a provider looks intentionally
-                                                     // configured (non-empty token or non-default URL) but is incomplete.
-                                                     // Providers left at package defaults (empty token, stock URL) are silently skipped.
-        $defaultTokens = ['ollama', 'lmstudio', '']; // package defaults that signal "not set up"
-        foreach (($cfg['providers'] ?? []) as $providerName => $providerCfg) {
+        // ── Named providers completeness ──────────────────────────────────────
+        // Skip the active provider (already fully validated above).
+        // For all others: flag only if a provider is partially configured —
+        // i.e. it has at least one non-default value but is missing required fields.
+        // Providers left entirely at package defaults are silently skipped.
+        $defaultLocalTokens = ['ollama', 'lmstudio', ''];
+        foreach ($allProviders as $providerName => $providerCfg) {
+            if ($providerName === $activeProvider) {
+                continue; // handled above
+            }
+
             $pToken = $providerCfg['api_token'] ?? '';
             $pUrl = $providerCfg['api_url'] ?? '';
             $pModel = $providerCfg['api_model'] ?? '';
 
-            $hasCustomToken = !empty($pToken) && !in_array(strtolower($pToken), $defaultTokens);
+            $hasCustomToken = !empty($pToken) && !in_array(strtolower($pToken), $defaultLocalTokens);
             $hasCustomUrl = !empty($pUrl);
+            $hasCustomModel = !empty($pModel);
 
-            // Only validate providers the user has partially or fully configured
-            $looksConfigured = $hasCustomToken || $hasCustomUrl;
-            if (!$looksConfigured) {
+            // Only validate providers that look intentionally configured
+            if (!$hasCustomToken && !$hasCustomUrl && !$hasCustomModel) {
                 continue;
             }
 
-            // URL must be valid if provided
             if (!empty($pUrl) && !filter_var($pUrl, FILTER_VALIDATE_URL)) {
-                $diagnostics[] = ['level' => 'error', 'group' => 'Providers', 'message' => "Named provider \"{$providerName}\" has an invalid api_url: \"{$pUrl}\"."];
+                $diagnostics[] = ['level' => 'error', 'group' => 'Providers', 'message' =>
+                    "Provider \"{$providerName}\" has an invalid api_url: \"{$pUrl}\"."];
             }
-            // Token missing on a provider the user appears to be using
-            if (empty($pToken)) {
-                $diagnostics[] = ['level' => 'warning', 'group' => 'Providers', 'message' => "Named provider \"{$providerName}\" has a URL configured but no api_token. Calls to this provider will fail."];
+            if (empty($pToken) || in_array(strtolower($pToken), $tokenPlaceholders)) {
+                $diagnostics[] = ['level' => 'warning', 'group' => 'Providers', 'message' =>
+                    "Provider \"{$providerName}\" has no valid api_token — calls to this provider will fail."];
             }
-            // Model missing on a provider the user appears to be using
             if (empty($pModel)) {
-                $diagnostics[] = ['level' => 'warning', 'group' => 'Providers', 'message' => "Named provider \"{$providerName}\" has no api_model set. Specify a model or it will inherit the global default."];
+                $diagnostics[] = ['level' => 'warning', 'group' => 'Providers', 'message' =>
+                    "Provider \"{$providerName}\" has no api_model set — there is no global fallback."];
             }
         }
 

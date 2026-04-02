@@ -140,7 +140,7 @@
     </div>
 </div>
 
-<div class="max-w-5xl mx-auto px-4 py-10">
+<div class="w-full px-6 py-10">
 
     {{-- ── Header ──────────────────────────────────────────────────────── --}}
     <div class="flex flex-wrap items-start justify-between gap-4 mb-8">

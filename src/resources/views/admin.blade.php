@@ -78,7 +78,7 @@
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 antialiased min-h-screen">
 
-<div class="max-w-6xl mx-auto px-4 py-10">
+<div class="w-full px-6 py-10">
 
     {{-- ── Header ──────────────────────────────────────────────────────────── --}}
     <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
@@ -331,25 +331,52 @@
 
             {{-- Named providers --}}
             @if(!empty($namedProviders))
+            @php
+                $providerTokenPlaceholders = [
+                    'your-api-key', 'your-api-token', 'sk-xxx', 'changeme', 'secret',
+                    'your-ollama-token', 'your-token', 'placeholder', 'token',
+                ];
+                $healthBaseUrl = url(config('ai-chatbox.route_prefix') . '/health');
+            @endphp
             <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-                <div class="px-5 py-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                <div class="px-5 py-3 border-b border-gray-100 dark:border-gray-700">
                     <span class="section-heading">Named Providers</span>
                 </div>
                 <div class="px-5 py-3 space-y-3">
                     @foreach($namedProviders as $name => $provider)
-                    @php $isActive = ($name === $activeProvider); @endphp
+                    @php
+                        $isActive = ($name === $activeProvider);
+                        $pUrl    = $provider['api_url']   ?? '';
+                        $pToken  = $provider['api_token'] ?? '';
+                        $pModel  = $provider['api_model'] ?? '';
+                        $urlOk   = !empty($pUrl) && filter_var($pUrl, FILTER_VALIDATE_URL);
+                        $tokenOk = !empty($pToken) && !in_array(strtolower($pToken), $providerTokenPlaceholders);
+                        $modelOk = !empty($pModel);
+                        $isComplete = $urlOk && $tokenOk && $modelOk;
+                        $incompleteReasons = [];
+                        if (!$urlOk)   $incompleteReasons[] = 'api_url not set or invalid';
+                        if (!$tokenOk) $incompleteReasons[] = 'api_token missing or placeholder';
+                        if (!$modelOk) $incompleteReasons[] = 'api_model not set';
+                        $resultId = 'hc-result-' . $name;
+                    @endphp
                     <div class="rounded-lg px-3 py-2.5 {{ $isActive ? 'bg-gray-50 dark:bg-gray-700/50' : 'bg-gray-50 dark:bg-gray-700/30' }}"
                          style="{{ $isActive ? 'outline: 2px solid var(--theme); outline-offset: -2px;' : '' }}">
+                        {{-- Provider header --}}
                         <div class="flex items-center gap-2 mb-1.5">
-                            <p class="text-xs font-semibold {{ $isActive ? 'text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300' }}">{{ $name }}</p>
+                            <p class="text-xs font-semibold {{ $isActive ? 'text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300' }} flex-1">{{ $name }}</p>
                             @if($isActive)
-                            <span class="badge badge-green">active</span>
+                                <span class="badge badge-green">active</span>
                             @endif
+                            <span class="badge {{ $isComplete ? 'badge-green' : 'badge-red' }}">
+                                {{ $isComplete ? 'complete' : 'incomplete' }}
+                            </span>
                         </div>
+
+                        {{-- Provider fields --}}
                         @foreach($provider as $k => $v)
-                        <div class="flex items-start gap-2 text-xs mb-0.5">
-                            <span class="config-key text-gray-400 shrink-0 w-24">{{ $k }}</span>
-                            <span class="config-val {{ $isActive ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-300' }} flex-1 break-all">
+                        <div class="grid grid-cols-[auto_1fr] gap-x-3 text-xs mb-0.5">
+                            <span class="config-key text-gray-400 whitespace-nowrap">{{ $k }}</span>
+                            <span class="config-val {{ $isActive ? 'text-gray-700 dark:text-gray-200' : 'text-gray-600 dark:text-gray-300' }} break-all">
                                 @if($k === 'api_token')
                                     {{ substr($v, 0, 6) }}{{ strlen($v) > 6 ? '••••••' : '' }}
                                 @else
@@ -358,10 +385,77 @@
                             </span>
                         </div>
                         @endforeach
+
+                        {{-- Incomplete reasons --}}
+                        @if(!$isComplete)
+                        <p class="text-xs text-red-500 dark:text-red-400 mt-1.5">
+                            {{ implode(', ', $incompleteReasons) }}
+                        </p>
+                        @endif
+
+                        {{-- Health check button + result --}}
+                        <div class="flex items-center gap-2 mt-2">
+                            @if($isComplete)
+                            <button
+                                type="button"
+                                onclick="providerHealthCheck(this, '{{ $healthBaseUrl }}?provider={{ urlencode($name) }}', '{{ $resultId }}')"
+                                class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium border transition-colors
+                                       border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300
+                                       hover:border-[var(--theme)] hover:text-[var(--theme)] dark:hover:border-[var(--theme)] dark:hover:text-[var(--theme)]
+                                       disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+                                </svg>
+                                Test
+                            </button>
+                            @else
+                            <button
+                                type="button"
+                                disabled
+                                title="{{ implode('; ', $incompleteReasons) }}"
+                                class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium border
+                                       border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600
+                                       cursor-not-allowed opacity-50"
+                            >
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+                                </svg>
+                                Test
+                            </button>
+                            @endif
+                            <span id="{{ $resultId }}" class="text-xs"></span>
+                        </div>
                     </div>
                     @endforeach
                 </div>
             </div>
+
+            <script>
+            async function providerHealthCheck(btn, url, resultId) {
+                btn.disabled = true;
+                const original = btn.innerHTML;
+                btn.innerHTML = '<svg class="w-3 h-3 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>&nbsp;Checking…';
+                const el = document.getElementById(resultId);
+                el.innerHTML = '';
+                try {
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    const online = data.status === 'online';
+                    if (online) {
+                        el.innerHTML = '<span class="badge badge-green">online</span>';
+                    } else {
+                        const msg = data.message || 'offline';
+                        const code = data.code ? ' <span style="opacity:0.75">[' + data.code + ']</span>' : '';
+                        el.innerHTML = '<span class="badge badge-red">' + msg + code + '</span>';
+                    }
+                } catch (e) {
+                    el.innerHTML = '<span class="badge badge-red">request failed</span>';
+                }
+                btn.innerHTML = original;
+                btn.disabled = false;
+            }
+            </script>
             @endif
 
             {{-- Frontend Driver --}}

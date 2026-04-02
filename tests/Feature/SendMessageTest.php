@@ -34,7 +34,7 @@ class SendMessageTest extends TestCase
 
     public function test_returns_e01_when_api_url_is_empty(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', '');
 
         $this->postJson('/ai-chatbox/message', ['message' => 'Hello'])
             ->assertStatus(500)
@@ -43,7 +43,7 @@ class SendMessageTest extends TestCase
 
     public function test_returns_e03_when_api_token_is_empty(): void
     {
-        $this->app['config']->set('ai-chatbox.api_token', '');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_token', '');
 
         $this->postJson('/ai-chatbox/message', ['message' => 'Hello'])
             ->assertStatus(500)
@@ -52,7 +52,7 @@ class SendMessageTest extends TestCase
 
     public function test_returns_e04_when_model_name_is_invalid(): void
     {
-        $this->app['config']->set('ai-chatbox.api_model', 'invalid model name!');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_model', 'invalid model name!');
 
         $this->postJson('/ai-chatbox/message', ['message' => 'Hello'])
             ->assertStatus(500)

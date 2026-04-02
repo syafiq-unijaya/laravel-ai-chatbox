@@ -13,7 +13,7 @@ class HealthCheckTest extends TestCase
 
     public function test_returns_e01_when_api_url_is_empty(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', '');
 
         $this->getJson('/ai-chatbox/health')
             ->assertStatus(503)
@@ -22,7 +22,7 @@ class HealthCheckTest extends TestCase
 
     public function test_returns_e02_when_api_url_has_no_host(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url', 'not-a-valid-url');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', 'not-a-valid-url');
 
         $this->getJson('/ai-chatbox/health')
             ->assertStatus(503)
@@ -34,7 +34,7 @@ class HealthCheckTest extends TestCase
     public function test_returns_e05_when_ssrf_blocks_private_ip(): void
     {
         $this->app['config']->set('ai-chatbox.ssrf_protection', true);
-        $this->app['config']->set('ai-chatbox.api_url', 'http://192.168.1.100:11434/v1/chat/completions');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', 'http://192.168.1.100:11434/v1/chat/completions');
 
         $this->getJson('/ai-chatbox/health')
             ->assertStatus(503)
@@ -44,7 +44,7 @@ class HealthCheckTest extends TestCase
     public function test_returns_e05_when_ssrf_blocks_localhost(): void
     {
         $this->app['config']->set('ai-chatbox.ssrf_protection', true);
-        $this->app['config']->set('ai-chatbox.api_url', 'http://127.0.0.1:11434/v1/chat/completions');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', 'http://127.0.0.1:11434/v1/chat/completions');
 
         $this->getJson('/ai-chatbox/health')
             ->assertStatus(503)
@@ -54,7 +54,7 @@ class HealthCheckTest extends TestCase
     public function test_returns_e06_when_dns_resolution_fails(): void
     {
         $this->app['config']->set('ai-chatbox.ssrf_protection', true);
-        $this->app['config']->set('ai-chatbox.api_url', 'http://nonexistent-host.invalid/api');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', 'http://nonexistent-host.invalid/api');
 
         $this->getJson('/ai-chatbox/health')
             ->assertStatus(503)
@@ -142,7 +142,7 @@ class HealthCheckTest extends TestCase
 
     public function test_offline_message_is_configurable(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url', '');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_url', '');
         $this->app['config']->set('ai-chatbox.offline_message', 'Custom offline message.');
 
         $this->getJson('/ai-chatbox/health')
@@ -154,8 +154,7 @@ class HealthCheckTest extends TestCase
 
     public function test_health_check_uses_active_provider_url(): void
     {
-        // Top-level api_url is empty — would give E01 if health check ignores active_provider
-        $this->app['config']->set('ai-chatbox.api_url', '');
+        // testprovider URL is valid but overriding to a different provider to confirm routing
         $this->app['config']->set('ai-chatbox.providers', [
             'myprovider' => [
                 'api_url'   => 'http://active.example.com/v1/chat',
@@ -172,8 +171,9 @@ class HealthCheckTest extends TestCase
             ->assertJsonFragment(['status' => 'online']);
     }
 
-    public function test_health_check_with_active_provider_default_uses_top_level(): void
+    public function test_health_check_with_active_provider_default_uses_first_provider(): void
     {
+        // 'default' resolves to the first configured provider (testprovider from TestCase)
         $this->app['config']->set('ai-chatbox.active_provider', 'default');
 
         $this->mockGuzzle([new Response(200)]);

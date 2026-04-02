@@ -9,11 +9,12 @@ use SyafiqUnijaya\AiChatbox\Engine\PromptBuilder;
  * Resolves named AI providers from config and returns an AiProvider instance.
  *
  * Named providers are defined under ai-chatbox.providers.{name}.
- * Each entry only needs to specify the keys that differ from the global defaults
- * (api_url, api_token, api_model). All other settings (temperature, system_prompt,
- * language, etc.) are inherited from the top-level ai-chatbox config.
+ * Each provider must specify api_url, api_token, and api_model. All other
+ * settings (temperature, system_prompt, language, etc.) are inherited from
+ * the top-level ai-chatbox config.
  *
- * The special name 'default' always maps to the top-level config as-is.
+ * The special name 'default' (and empty string) resolves to the configured
+ * active_provider, falling back to the first defined provider.
  *
  * Calling methods directly on the facade (e.g. AI::chat(...)) is delegated
  * to the 'default' provider via __call().
@@ -54,14 +55,16 @@ class AiManager
 
     public function resolveConfig(string $name): array
     {
-        // 'default' uses the top-level ai-chatbox config (full, backward-compatible)
         $base = config('ai-chatbox', []);
-
-        if ($name === 'default') {
-            return $base;
-        }
-
         $providers = $base['providers'] ?? [];
+
+        // 'default' and empty resolve to whatever active_provider is configured
+        if ($name === 'default' || $name === '') {
+            $active = $base['active_provider'] ?? '';
+            $name = ($active && $active !== 'default')
+            ? $active
+            : (string) array_key_first($providers);
+        }
 
         if (!array_key_exists($name, $providers)) {
             throw new \InvalidArgumentException(

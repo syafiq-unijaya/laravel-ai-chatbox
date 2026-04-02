@@ -145,9 +145,14 @@ class ChatboxController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-    public function healthCheck(): JsonResponse
+    public function healthCheck(Request $request): JsonResponse
     {
-        $result = $this->healthChecker->check($this->effectiveConfig());
+        $providerName = $request->query('provider');
+        $cfg = $providerName
+        ? app(AiManager::class)->resolveConfig((string) $providerName)
+        : $this->effectiveConfig();
+
+        $result = $this->healthChecker->check($cfg);
         $status = $result['status'] === 'online' ? 200 : 503;
 
         return response()->json($result, $status);
@@ -156,19 +161,15 @@ class ChatboxController extends Controller
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /**
-     * Return the effective config for the chatbox widget.
-     * If active_provider is set to a named provider, its api_url/token/model
-     * override the top-level defaults; all other settings are inherited.
+     * Return the effective config for the chatbox widget, resolved from the
+     * active provider. api_url, api_token, and api_model always come from
+     * the provider entry — never from top-level env vars.
      */
     private function effectiveConfig(): array
     {
-        $active = config('ai-chatbox.active_provider', 'default');
-
-        if (empty($active) || $active === 'default') {
-            return config('ai-chatbox');
-        }
-
-        return app(AiManager::class)->resolveConfig($active);
+        return app(AiManager::class)->resolveConfig(
+            config('ai-chatbox.active_provider', 'default')
+        );
     }
 
     private function engineError(AiEngineException $e): JsonResponse

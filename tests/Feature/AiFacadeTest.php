@@ -38,10 +38,13 @@ class AiFacadeTest extends TestCase
         $this->assertInstanceOf(AiProvider::class, $provider);
     }
 
-    public function test_ai_provider_default_config_matches_global_config(): void
+    public function test_ai_provider_default_resolves_to_active_named_provider(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url',   'http://test.provider.com');
-        $this->app['config']->set('ai-chatbox.api_model', 'test-model-x');
+        $this->app['config']->set('ai-chatbox.providers.testprovider', [
+            'api_url'   => 'http://test.provider.com',
+            'api_token' => 'test-token',
+            'api_model' => 'test-model-x',
+        ]);
 
         $provider = AI::provider('default');
 
@@ -98,7 +101,7 @@ class AiFacadeTest extends TestCase
 
     public function test_modifiers_do_not_affect_subsequent_provider_calls(): void
     {
-        $this->app['config']->set('ai-chatbox.api_model', 'original-model');
+        $this->app['config']->set('ai-chatbox.providers.testprovider.api_model', 'original-model');
 
         AI::provider('default')->withModel('modified-model');
 

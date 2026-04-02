@@ -30,9 +30,6 @@ abstract class TestCase extends Orchestra
             'prefix'   => '',
         ]);
 
-        $app['config']->set('ai-chatbox.api_url', 'http://ai.example.com/v1/chat/completions');
-        $app['config']->set('ai-chatbox.api_token', 'test-token');
-        $app['config']->set('ai-chatbox.api_model', 'test-model');
         $app['config']->set('ai-chatbox.ssrf_protection', false);
         $app['config']->set('ai-chatbox.allowed_origins', ['http://localhost']);
         $app['config']->set('ai-chatbox.offline_message', 'AI service is currently unreachable.');
@@ -41,10 +38,16 @@ abstract class TestCase extends Orchestra
         $app['config']->set('ai-chatbox.rag_embedding_url', 'http://embed.example.com/v1/embeddings');
         $app['config']->set('ai-chatbox.rag_embedding_model', 'test-embed');
 
-        // Pin to 'default' so effectiveConfig() uses top-level api_url/token/model set above.
-        // Individual tests that want to test active_provider routing opt in by overriding this.
-        $app['config']->set('ai-chatbox.active_provider', 'default');
-        $app['config']->set('ai-chatbox.providers', []);
+        // Use a named provider so effectiveConfig() / resolveConfig() always has a valid target.
+        // Tests that need to override api settings do so via 'ai-chatbox.providers.testprovider.*'.
+        $app['config']->set('ai-chatbox.active_provider', 'testprovider');
+        $app['config']->set('ai-chatbox.providers', [
+            'testprovider' => [
+                'api_url'   => 'http://ai.example.com/v1/chat/completions',
+                'api_token' => 'test-token',
+                'api_model' => 'test-model',
+            ],
+        ]);
     }
 
     /**

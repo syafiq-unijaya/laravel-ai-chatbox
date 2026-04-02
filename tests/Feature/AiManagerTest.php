@@ -21,10 +21,17 @@ class AiManagerTest extends TestCase
         $this->assertInstanceOf(AiProvider::class, $provider);
     }
 
-    public function test_provider_default_config_matches_global(): void
+    public function test_provider_default_resolves_to_active_named_provider(): void
     {
-        $this->app['config']->set('ai-chatbox.api_url',   'http://test-default.example.com');
-        $this->app['config']->set('ai-chatbox.api_model', 'default-model');
+        // 'default' must route through active_provider → the named provider's values win
+        $this->app['config']->set('ai-chatbox.active_provider', 'myprovider');
+        $this->app['config']->set('ai-chatbox.providers', [
+            'myprovider' => [
+                'api_url'   => 'http://test-default.example.com',
+                'api_token' => 'my-token',
+                'api_model' => 'default-model',
+            ],
+        ]);
 
         $provider = $this->app->make(AiManager::class)->provider('default');
 

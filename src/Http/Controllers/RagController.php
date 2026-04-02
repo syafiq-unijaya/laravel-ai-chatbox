@@ -13,7 +13,8 @@ use SyafiqUnijaya\AiChatbox\Services\EmbeddingService;
 
 class RagController extends Controller
 {
-    public function __construct(private readonly AiManager $aiManager) {}
+    public function __construct(private readonly AiManager $aiManager)
+    {}
 
     // ── List ─────────────────────────────────────────────────────────────────
 
@@ -22,17 +23,17 @@ class RagController extends Controller
         $documents = RagDocument::withCount('chunks')->latest()->get();
         $cfg = $this->effectiveConfig();
 
-        $embeddingUrl   = $cfg['rag_embedding_url'] ?? '';
+        $embeddingUrl = $cfg['rag_embedding_url'] ?? '';
         $embeddingModel = $cfg['rag_embedding_model'] ?? '';
 
         return view('ai-chatbox::rag', [
-            'documents'           => $documents,
-            'ragEnabled'          => (bool) ($cfg['rag_enabled'] ?? false),
-            'embeddingUrl'        => $embeddingUrl,
-            'embeddingModel'      => $embeddingModel,
+            'documents' => $documents,
+            'ragEnabled' => (bool) ($cfg['rag_enabled'] ?? false),
+            'embeddingUrl' => $embeddingUrl,
+            'embeddingModel' => $embeddingModel,
             'embeddingConfigured' => !empty($embeddingUrl) && !empty($embeddingModel),
-            'themeColor'          => config('ai-chatbox.theme_color', '#4f46e5'),
-            'colorScheme'         => config('ai-chatbox.color_scheme', 'auto'),
+            'themeColor' => config('ai-chatbox.theme_color', '#4f46e5'),
+            'colorScheme' => config('ai-chatbox.color_scheme', 'auto'),
         ]);
     }
 
@@ -119,13 +120,9 @@ class RagController extends Controller
 
     private function effectiveConfig(): array
     {
-        $active = config('ai-chatbox.active_provider', 'default');
-
-        if (empty($active) || $active === 'default') {
-            return config('ai-chatbox');
-        }
-
-        return $this->aiManager->resolveConfig($active);
+        return $this->aiManager->resolveConfig(
+            config('ai-chatbox.active_provider', 'default')
+        );
     }
 
     private function processDocument(RagDocument $document, string $content): void

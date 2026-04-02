@@ -50,7 +50,10 @@ class AiChatboxServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (config('app.debug') && config('ai-chatbox.api_token') !== 'ollama') {
+        $activeProvider = config('ai-chatbox.active_provider', 'ollama');
+        $providerToken = config("ai-chatbox.providers.{$activeProvider}.api_token", '');
+        $localTokens = ['ollama', 'lmstudio', ''];
+        if (config('app.debug') && !in_array(strtolower($providerToken), $localTokens, true)) {
             Log::warning('AI Chatbox: APP_DEBUG is enabled while a real API token is configured. Disable debug mode in production.');
         }
 
