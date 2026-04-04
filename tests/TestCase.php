@@ -25,9 +25,10 @@ abstract class TestCase extends Orchestra
         // SQLite in-memory for RAG model tests
         $app['config']->set('database.default', 'testingdb');
         $app['config']->set('database.connections.testingdb', [
-            'driver'   => 'sqlite',
-            'database' => ':memory:',
-            'prefix'   => '',
+            'driver'                  => 'sqlite',
+            'database'                => ':memory:',
+            'prefix'                  => '',
+            'foreign_key_constraints' => true,
         ]);
 
         $app['config']->set('ai-chatbox.ssrf_protection', false);

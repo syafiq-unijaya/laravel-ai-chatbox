@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use SyafiqUnijaya\AiChatbox\Console\Commands\PruneConversations;
 use SyafiqUnijaya\AiChatbox\Engine\Contracts\AiEngineInterface;
 use SyafiqUnijaya\AiChatbox\Engine\OpenAiCompatibleEngine;
 use SyafiqUnijaya\AiChatbox\Http\Middleware\CorsMiddleware;
@@ -68,6 +69,7 @@ class AiChatboxServiceProvider extends ServiceProvider
         $this->registerPublishing();
         $this->registerBladeDirective();
         $this->registerLivewireComponent();
+        $this->registerCommands();
     }
 
     protected function registerRoutes(): void
@@ -165,6 +167,15 @@ class AiChatboxServiceProvider extends ServiceProvider
     {
         if (class_exists(\Livewire\Livewire::class)) {
             \Livewire\Livewire::component('ai-chatbox', \SyafiqUnijaya\AiChatbox\Livewire\AiChatbox::class);
+        }
+    }
+
+    protected function registerCommands(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                PruneConversations::class,
+            ]);
         }
     }
 }

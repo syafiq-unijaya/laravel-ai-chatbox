@@ -24,6 +24,7 @@ Connect to any **OpenAI-compatible API** including Ollama, OpenAI, Groq, LM Stud
 - [Frontend Drivers](#frontend-drivers)
 - [AI Provider Facade](#ai-provider-facade)
 - [Conversation Threads & Memory](#conversation-threads--memory)
+- [Pruning Old Conversations](#pruning-old-conversations)
 - [Token Control](#token-control)
 - [Real-Time Streaming](#real-time-streaming)
 - [RAG — Retrieval-Augmented Generation](#rag--retrieval-augmented-generation)
@@ -668,6 +669,75 @@ Chat bubbles are persisted in the browser, automatically scoped to prevent histo
 
 ---
 
+## Pruning Old Conversations
+
+When using the `database` memory driver, conversation records accumulate over time. The `ai-chatbox:prune-conversations` command permanently deletes conversations (and their messages via cascade) that have had no activity beyond the configured retention period.
+
+### Running the command
+
+```bash
+# Use the default from config (AI_CHATBOX_PRUNE_DAYS, default 30 days)
+php artisan ai-chatbox:prune-conversations
+
+# Override the retention period at runtime
+php artisan ai-chatbox:prune-conversations --days=60
+
+# Preview what would be deleted without making any changes
+php artisan ai-chatbox:prune-conversations --dry-run
+
+# Run even when memory_driver is not set to 'database' (e.g. cleanup after switching drivers)
+php artisan ai-chatbox:prune-conversations --force
+```
+
+### Scheduling automatic pruning
+
+Register the command in your application's `routes/console.php` (Laravel 11+) or `app/Console/Kernel.php` (Laravel 10):
+
+**Laravel 11+ (`routes/console.php`):**
+
+```php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('ai-chatbox:prune-conversations')->daily();
+```
+
+**Laravel 10 (`app/Console/Kernel.php`):**
+
+```php
+protected function schedule(Schedule $schedule): void
+{
+    $schedule->command('ai-chatbox:prune-conversations')->daily();
+}
+```
+
+### Configuration
+
+| Key | Env var | Default | Description |
+|---|---|---|---|
+| `conversation_prune_days` | `AI_CHATBOX_PRUNE_DAYS` | `30` | Conversations inactive for longer than this many days are deleted |
+
+```env
+AI_CHATBOX_PRUNE_DAYS=30   # default — 30 days retention
+AI_CHATBOX_PRUNE_DAYS=90   # longer retention
+AI_CHATBOX_PRUNE_DAYS=7    # aggressive cleanup
+```
+
+### Error handling
+
+The command performs the following checks before deleting anything:
+
+| Condition | Behaviour |
+|---|---|
+| `memory_driver` is not `database` | Exits with an error — use `--force` to override |
+| `ai_chatbox_conversations` table missing | Exits with an error and prints migration instructions |
+| `ai_chatbox_messages` table missing | Warns but continues (cascade may not apply) |
+| `--days` value is less than 1 | Exits with an error |
+| No matching conversations found | Exits cleanly with an informational message |
+
+> **How "last activity" is determined:** `updated_at` on the conversation row is updated every time `saveHistory` is called — i.e., every time the user sends a message. Conversations that have genuinely had no activity for `--days` days are safe to remove.
+
+---
+
 ## Token Control
 
 Two independent limits control how much is sent to the AI per request.
@@ -1247,6 +1317,7 @@ AI_CHATBOX_SOUND_VOLUME=0.3
 # ── Memory & Storage ──────────────────────────────────────────────────────────
 AI_CHATBOX_MEMORY_DRIVER=session  # session | database
 AI_CHATBOX_STORAGE=local          # local | session
+AI_CHATBOX_PRUNE_DAYS=30          # retention period for ai-chatbox:prune-conversations
 
 # ── RAG ───────────────────────────────────────────────────────────────────────
 AI_CHATBOX_RAG=false

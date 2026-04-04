@@ -41,6 +41,9 @@ class DatabaseConversationRepository implements ConversationRepositoryInterface
         if (!empty($history)) {
             $conversation->messages()->createMany($history);
         }
+
+        // Keep updated_at current so the prune command can use it as last-activity time
+        $conversation->touch();
     }
 
     public function trimToLimit(string $threadId, int $maxPairs): void

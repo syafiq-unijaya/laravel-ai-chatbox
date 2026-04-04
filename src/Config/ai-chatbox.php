@@ -345,6 +345,22 @@ return [
 
 /*
 |--------------------------------------------------------------------------
+| Conversation Pruning
+|--------------------------------------------------------------------------
+| Default retention period used by the `ai-chatbox:prune-conversations`
+| Artisan command. Conversations with no activity beyond this many days
+| will be permanently deleted along with all their messages.
+|
+| Override at runtime with the --days option:
+|   php artisan ai-chatbox:prune-conversations --days=60
+|
+| Only applies when memory_driver=database.
+*/
+
+    'conversation_prune_days' => env('AI_CHATBOX_PRUNE_DAYS', 30),
+
+/*
+|--------------------------------------------------------------------------
 | RAG Processing Time Limit
 |--------------------------------------------------------------------------
 | Maximum seconds PHP is allowed to spend on a single document upload
