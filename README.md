@@ -72,6 +72,7 @@ Connect to any **OpenAI-compatible API** including Ollama, OpenAI, Groq, LM Stud
 **Admin & Operations**
 - Admin dashboard at `/ai-chatbox/admin` with config diagnostics, live error/warning/notice checks, and provider details
 - Conversations viewer at `/ai-chatbox/admin/conversations` (requires database memory driver)
+- `ai-chatbox:prune-conversations` Artisan command — bulk-delete inactive conversations with `--days`, `--dry-run`, and `--force` options; schedulable via Laravel's task scheduler
 - Health check endpoint pings the AI service before the widget opens
 - SSRF protection, CORS origin whitelist, configurable rate limiting
 
@@ -1113,6 +1114,9 @@ The package is organised into four explicit layers. Each layer communicates only
 src/
 ├── Config/
 │   └── ai-chatbox.php
+├── Console/
+│   └── Commands/
+│       └── PruneConversations.php # ai-chatbox:prune-conversations
 ├── Database/
 │   └── Migrations/
 ├── Engine/
@@ -1259,7 +1263,7 @@ If the widget shows an offline toast or requests fail, check `storage/logs/larav
 composer test
 ```
 
-The test suite covers: controller responses, error classification, session history, conversation thread isolation, token-based context trimming, SSE streaming, RAG document upload/delete/reprocess, RAG context injection, CORS middleware, SSRF protection, health check logic, `AiManager` named provider resolution, `AiProvider` fluent modifiers and immutability, and the `AI` facade — using PHPUnit 11 and Orchestra Testbench.
+The test suite covers: controller responses, error classification, session history, conversation thread isolation, token-based context trimming, SSE streaming, RAG document upload/delete/reprocess, RAG context injection, CORS middleware, SSRF protection, health check logic, `AiManager` named provider resolution, `AiProvider` fluent modifiers and immutability, the `AI` facade, and the `ai-chatbox:prune-conversations` command (pre-flight checks, deletion, boundary conditions, cascade, `--dry-run`, `--force`, config key precedence) — using PHPUnit 11 and Orchestra Testbench.
 
 ---
 
