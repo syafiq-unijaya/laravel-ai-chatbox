@@ -10,6 +10,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.5] — 2026-04-04
+
+### Added
+- **`ai-chatbox:prune-conversations` Artisan command** — bulk-delete conversations that have been inactive beyond a configurable retention period:
+  - `--days=N` — override the retention threshold for this run
+  - `--dry-run` — preview how many conversations would be removed without deleting anything
+  - `--force` — proceed even when `memory_driver` is not `database`
+  - Pre-flight checks: validates that `memory_driver` is `database`, that both `ai_chatbox_conversations` and `ai_chatbox_messages` tables exist, and that `--days` is ≥ 1
+  - Messages are removed automatically via the existing foreign key cascade — no manual joins required
+  - Suitable for scheduling via Laravel's task scheduler (see README for Laravel 10 / 11+ examples)
+- **`conversation_prune_days` config key** (`AI_CHATBOX_PRUNE_DAYS`, default `30`) — sets the default retention period used by `ai-chatbox:prune-conversations` when `--days` is not passed
+- **`PruneConversationsTest`** — 19 feature tests covering pre-flight validation, happy-path deletion, boundary conditions, cascade behaviour, `--dry-run`, `--force`, config key precedence, and the `saveHistory` `updated_at` touch behaviour
+- **`Flow.md`** — architecture flow documentation describing the request lifecycle across the three-layer architecture
+
+### Changed
+- `DatabaseConversationRepository::saveHistory()` now calls `$conversation->touch()` after persisting messages so that `updated_at` always reflects the time of the last message, not just the conversation creation time; this makes the prune command's inactivity window accurate
+
+---
+
+## [0.2.4] — 2026-04-02
+
+### Changed
+- **Named-provider config is now the only source of API credentials** — the legacy top-level `api_url`, `api_token`, and `api_model` config keys (and their `AI_CHATBOX_API_*` env vars) have been removed; all provider settings must now be defined under `providers.{name}` in the config file. This change had been the documented practice since `0.2.1`; this release enforces it.
+- **`AiManager::resolveConfig('default')` now routes through `active_provider`** — previously it returned the (now-removed) top-level keys; it now resolves the active named provider by reading `active_provider` config, falling back to the first defined provider if `active_provider` is `'default'` or empty
+- **`AdminController` uses resolved provider config for diagnostics** — the admin dashboard now calls `AiManager::resolveConfig()` to obtain the effective `api_url`, `api_token`, and `api_model` values; diagnostic messages now reference provider-specific env var names (e.g. `OLLAMA_URL`, `OPENAI_URL`) rather than the removed `AI_CHATBOX_API_*` names; a try/catch ensures the page still renders when the active provider is misconfigured
+- **`Config/ai-chatbox.php` documentation reorganised** — inline comments rewritten to reflect the named-provider model; the top-level API credential block is removed
+- **CSS polish** — chatbox widget visual refinements (spacing, focus states, scrollbar styling)
+- **`composer.json` keywords expanded** — added Packagist keywords for improved discoverability (`llm`, `gpt`, `local-llm`, `multi-provider`, `admin-dashboard`, `knowledge-base`, `token-streaming`, and others)
+- **README and TROUBLESHOOTING.md updated** — all references to `AI_CHATBOX_API_URL`, `AI_CHATBOX_API_TOKEN`, and `AI_CHATBOX_API_MODEL` replaced with named-provider equivalents
+
+### Fixed
+- Admin diagnostics no longer warn about missing `api_url`/`api_token`/`api_model` "inheriting from top-level defaults" — those defaults no longer exist; the error messages now correctly point to provider-specific env vars
+
+---
+
 ## [0.2.3] — 2026-03-27
 
 ### Added
@@ -287,7 +322,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Configurable API URL, token, and model via `.env`
 - Service provider with auto-discovery, asset publishing, and view publishing
 
-[Unreleased]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.3...HEAD
+[Unreleased]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.5...HEAD
+[0.2.5]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.4...0.2.5
+[0.2.4]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.3...0.2.4
 [0.2.3]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.2...0.2.3
 [0.2.2]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.1...0.2.2
 [0.2.1]: https://github.com/syafiq-unijaya/laravel-ai-chatbox/compare/0.2.0...0.2.1
